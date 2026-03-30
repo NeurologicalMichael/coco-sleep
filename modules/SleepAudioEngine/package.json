@@ -1,0 +1,6 @@
+{
+  "name": "sleep-audio-engine",
+  "version": "1.0.0",
+  "description": "Native AVAudioEngine-based sleep sound analysis for Coco Sleep",
+  "main": "index.ts"
+}

@@ -1,30 +1,58 @@
 {
   "expo": {
-    "name": "coco-sleep",
+    "name": "Coco Sleep",
     "slug": "coco-sleep",
     "version": "1.0.0",
+    "scheme": "coco-sleep",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#000000"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": false,
+      "bundleIdentifier": "com.breibart.coco",
+      "buildNumber": "12",
+      "entitlements": {
+        "com.apple.security.application-groups": [
+          "group.com.breibart.coco"
+        ]
+      },
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Coco records overnight audio to detect snoring, sleep talking, and other sounds. Short event clips are saved to your device — nothing is uploaded. The continuous recording is deleted after each session.",
+        "NSLocationWhenInUseUsageDescription": "Coco uses your location to detect if you've left your bed and auto-end your sleep session.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Coco uses your location to detect if you've left your bed and auto-end your sleep session.",
+        "UIBackgroundModes": [
+          "audio",
+          "location"
+        ]
+      }
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
-      },
-      "predictiveBackGestureEnabled": false
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0A0E1A"
+      }
     },
     "web": {
-      "favicon": "./assets/favicon.png"
-    }
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      "@react-native-community/datetimepicker",
+      "./plugins/withCocoWidget",
+      "expo-secure-store",
+      "expo-audio",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Coco uses your location to detect if you've left your bed and auto-end your sleep session.",
+          "isIosBackgroundLocationEnabled": true
+        }
+      ]
+    ]
   }
 }
