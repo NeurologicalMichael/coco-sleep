@@ -79,12 +79,12 @@ export default function RootLayout() {
     }
   }, [loadingDone]);
 
-  // Video-game style loading screen: fade in → hold → fade out (~1.5s total)
+  // Loading screen: fade in → hold → fade out (~0.8s total)
   useEffect(() => {
     Animated.sequence([
-      Animated.timing(loadingOpacity, { toValue: 1, duration: 400, useNativeDriver: true }),
-      Animated.delay(500),
-      Animated.timing(loadingOpacity, { toValue: 0, duration: 500, useNativeDriver: true }),
+      Animated.timing(loadingOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
+      Animated.delay(200),
+      Animated.timing(loadingOpacity, { toValue: 0, duration: 300, useNativeDriver: true }),
     ]).start(() => setLoadingDone(true));
   }, []);
 
@@ -93,24 +93,24 @@ export default function RootLayout() {
     usePurchaseStore.getState().setPremium(true);
   }, []);
 
-  // Re-sync widget whenever bedtime or wake time changes so countdown stays accurate
+  // Re-sync widget whenever bedtime, wake time, or tracking state changes
   const bedtimeTime = useCoachStore((s) => s.settings.bedtimeReminderTime);
   const wakeTime    = useCoachStore((s) => s.settings.wakeTime);
+  const isTracking  = useSleepStore((s) => !!s.activeSession?.isActive);
   useEffect(() => {
     const { streak, tier, mood } = useCocoStore.getState();
     const { latestSession } = useRecoveryStore.getState();
-    const { activeSession } = useSleepStore.getState();
     void syncWidgetState({
       recoveryScore: latestSession?.recovery.recoveryScore ?? null,
       streak,
       tierName: getTierForLevel(tier).name,
       mood,
-      isTracking: !!activeSession?.isActive,
+      isTracking,
       bedtimeTime,
       wakeTime,
       cocoLevel: latestSession ? scoreToCocoLevel(latestSession.recovery.recoveryScore) : 'normal',
     });
-  }, [bedtimeTime, wakeTime]);
+  }, [bedtimeTime, wakeTime, isTracking]);
 
   // One-time cleanup: purge any sessions under 10 minutes from history
   useEffect(() => {
@@ -184,10 +184,9 @@ export default function RootLayout() {
     return () => sub.remove();
   }, []);
 
-  // Handle widget deep links:
-  //   coco-sleep://toggle-sleep  → set pendingWidgetToggle + navigate to Sleep tab
-  //   coco-sleep://begin-sleep   → set pendingWidgetToggle + navigate to Sleep tab (Begin Sleep button)
-  //   coco-sleep://sleep         → navigate to Sleep tab
+  // Handle widget deep links when app is already open (foreground URL events).
+  // Cold-start deep links (begin-sleep, toggle-sleep) are handled by app/begin-sleep.tsx
+  // via Expo Router's file-based routing — no need to handle them here on cold start.
   useEffect(() => {
     function handleUrl({ url }: { url: string }) {
       if (url.includes('toggle-sleep') || url.includes('begin-sleep')) {
@@ -198,16 +197,6 @@ export default function RootLayout() {
       }
     }
     const sub = Linking.addEventListener('url', handleUrl);
-    // Handle cold-start URL
-    Linking.getInitialURL().then((url) => {
-      if (!url) return;
-      if (url.includes('toggle-sleep') || url.includes('begin-sleep')) {
-        useSleepStore.getState().setPendingWidgetToggle(true);
-        router.push('/(tabs)/sleep');
-      } else if (url.includes('sleep')) {
-        router.push('/(tabs)/sleep');
-      }
-    });
     return () => sub.remove();
   }, []);
 

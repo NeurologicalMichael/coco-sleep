@@ -68,51 +68,7 @@ public class SleepAudioEngineModule: Module {
 
     AsyncFunction("start") { (promise: Promise) in
       guard !self.isRunning else { promise.resolve(true); return }
-
-      let session = AVAudioSession.sharedInstance()
-      do {
-        // .measurement = minimal processing, ideal for analysis
-        try session.setCategory(
-          .playAndRecord,
-          mode: .measurement,
-          options: [.mixWithOthers, .allowBluetooth]
-        )
-        try session.setActive(true)
-      } catch {
-        promise.reject("AUDIO_SESSION_ERROR", error.localizedDescription)
-        return
-      }
-
-      let eng = AVAudioEngine()
-      let input  = eng.inputNode
-      let format = input.outputFormat(forBus: 0)
-
-      input.installTap(onBus: 0, bufferSize: self.BUFFER_SIZE, format: format) { [weak self] buffer, _ in
-        self?.processBuffer(buffer)
-      }
-
-      do {
-        try eng.start()
-      } catch {
-        promise.reject("ENGINE_START_ERROR", error.localizedDescription)
-        return
-      }
-
-      self.engine   = eng
-      self.isRunning = true
-      self.rmsBuffer = []
-
-      // Classify accumulated RMS values every EPOCH_SECS
-      DispatchQueue.main.async {
-        self.epochTimer = Timer.scheduledTimer(
-          withTimeInterval: self.EPOCH_SECS,
-          repeats: true
-        ) { [weak self] _ in
-          self?.classifyAndEmit()
-        }
-      }
-
-      promise.resolve(true)
+      self.startEngineWithRetry(attempt: 0, promise: promise)
     }
 
     AsyncFunction("stop") { (promise: Promise) in
@@ -123,6 +79,63 @@ public class SleepAudioEngineModule: Module {
     Function("isRunning") {
       return self.isRunning
     }
+  }
+
+  // ── Engine start with retry ────────────────────────────────────────────────
+
+  private func startEngineWithRetry(attempt: Int, promise: Promise) {
+    let session = AVAudioSession.sharedInstance()
+    do {
+      // Deactivate first to clear any stale state, then reconfigure
+      try? session.setActive(false, options: .notifyOthersOnDeactivation)
+      try session.setCategory(
+        .playAndRecord,
+        mode: .measurement,
+        options: [.mixWithOthers, .allowBluetooth, .defaultToSpeaker]
+      )
+      try session.setActive(true)
+    } catch {
+      promise.reject("AUDIO_SESSION_ERROR", error.localizedDescription)
+      return
+    }
+
+    let eng = AVAudioEngine()
+    let input = eng.inputNode
+    let format = input.outputFormat(forBus: 0)
+
+    input.installTap(onBus: 0, bufferSize: self.BUFFER_SIZE, format: format) { [weak self] buffer, _ in
+      self?.processBuffer(buffer)
+    }
+
+    do {
+      try eng.start()
+    } catch {
+      // Retry once after a short delay — "helper application" errors are often transient
+      if attempt < 1 {
+        input.removeTap(onBus: 0)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+          self.startEngineWithRetry(attempt: attempt + 1, promise: promise)
+        }
+        return
+      }
+      promise.reject("ENGINE_START_ERROR", error.localizedDescription)
+      return
+    }
+
+    self.engine    = eng
+    self.isRunning = true
+    self.rmsBuffer = []
+
+    DispatchQueue.main.async {
+      self.epochTimer = Timer.scheduledTimer(
+        withTimeInterval: self.EPOCH_SECS,
+        repeats: true
+      ) { [weak self] _ in
+        self?.classifyAndEmit()
+      }
+    }
+
+    promise.resolve(true)
   }
 
   // ── Audio processing ───────────────────────────────────────────────────────

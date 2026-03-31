@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { useAudioPlayer } from 'expo-audio';
 import { Colors } from '../../constants/colors';
 import { DiagonalStripes } from '../../components/DiagonalStripes';
-import { useRecoveryStore } from '../../store/recoveryStore';
+import { useRecoveryStore, ProcessedSession } from '../../store/recoveryStore';
 import { RecoveryInsight } from '../../utils/recoveryEngine';
 import { AudioEvent } from '../../utils/hrvProxy';
 import { generateEstimatedEvents } from '../../utils/sleepScore';
@@ -17,283 +17,554 @@ const severityColor: Record<RecoveryInsight['severity'], string> = {
   good: Colors.green, neutral: Colors.info, warning: Colors.warning, critical: Colors.danger,
 };
 
-export default function ReportScreen() {
-  const router = useRouter();
-  const { latestSession } = useRecoveryStore();
-  const { isPremium } = usePurchaseStore();
-  const [showInsights, setShowInsights] = useState(false);
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-  if (!latestSession) {
-    return (
-      <View style={styles.empty}>
-        <Text style={styles.emptyTitle}>NO REPORT YET.</Text>
-        <View style={styles.emptyBar} />
-        <Text style={styles.emptySub}>Complete a sleep session to see your recovery report.</Text>
-      </View>
-    );
-  }
+function scoreColor(score: number): string {
+  if (score >= 75) return Colors.green;
+  if (score >= 50) return Colors.gold;
+  return Colors.red;
+}
 
-  const { recovery, scores, durationHours } = latestSession;
-  const recovScoreColor = recovery.recoveryScore >= 75 ? Colors.green : recovery.recoveryScore >= 50 ? Colors.gold : Colors.red;
-  const cocoLevel = scoreToCocoLevel(recovery.recoveryScore);
-  const cocoInfo  = COCO_LEVELS[cocoLevel];
+function formatClockTime(ts: number) {
+  const d = new Date(ts);
+  const h = d.getHours(), m = d.getMinutes();
+  return `${h % 12 || 12}:${m.toString().padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
+}
+
+function formatDate(dateStr: string) {
+  const d = new Date(dateStr);
+  const MONTHS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+  const DAYS   = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
+  return `${DAYS[d.getDay()]} ${MONTHS[d.getMonth()]} ${d.getDate()}`;
+}
+
+// ─── Bucket helpers ────────────────────────────────────────────────────────────
+
+type Bucket = { label: string; sessions: ProcessedSession[] };
+
+function buildDayBuckets(history: ProcessedSession[]): Bucket[] {
+  const DAY = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
+  return Array.from({ length: 7 }, (_, idx) => {
+    const d = new Date(); d.setDate(d.getDate() - (6 - idx));
+    const y = d.getFullYear(), mo = d.getMonth(), da = d.getDate();
+    return {
+      label: DAY[d.getDay()],
+      sessions: history.filter((s) => { const sd = new Date(s.date); return sd.getFullYear()===y && sd.getMonth()===mo && sd.getDate()===da; }),
+    };
+  });
+}
+
+function buildWeekBuckets(history: ProcessedSession[]): Bucket[] {
+  return Array.from({ length: 4 }, (_, idx) => {
+    const i = 3 - idx;
+    const end = new Date(); end.setDate(end.getDate() - i * 7);
+    const start = new Date(end); start.setDate(start.getDate() - 6);
+    const label = `${start.getMonth()+1}/${start.getDate()}`;
+    const s0 = new Date(start).setHours(0,0,0,0);
+    const e0 = new Date(end).setHours(23,59,59,999);
+    return { label, sessions: history.filter((s) => { const t = new Date(s.date).getTime(); return t >= s0 && t <= e0; }) };
+  });
+}
+
+function buildMonthBuckets(history: ProcessedSession[]): Bucket[] {
+  const MONTHS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+  return Array.from({ length: 6 }, (_, idx) => {
+    const d = new Date(); d.setMonth(d.getMonth() - (5 - idx));
+    const y = d.getFullYear(), mo = d.getMonth();
+    return {
+      label: MONTHS[mo],
+      sessions: history.filter((s) => { const sd = new Date(s.date); return sd.getFullYear()===y && sd.getMonth()===mo; }),
+    };
+  });
+}
+
+function avgOf(buckets: Bucket[], fn: (s: ProcessedSession) => number): { label: string; avg: number | null }[] {
+  return buckets.map((b) => ({
+    label: b.label,
+    avg: b.sessions.length > 0 ? parseFloat((b.sessions.reduce((a, s) => a + fn(s), 0) / b.sessions.length).toFixed(1)) : null,
+  }));
+}
+
+// ─── Bar chart with full axes ──────────────────────────────────────────────────
+
+const CHART_H = 130; // pixel height of the bar area
+
+function BarChart({ buckets, maxVal, formatVal, colorFn, ticks }: {
+  buckets: { label: string; avg: number | null }[];
+  maxVal: number;
+  formatVal: (v: number) => string;
+  colorFn: (v: number) => string;
+  ticks?: number[];
+}) {
+  const yTicks = ticks ?? [0, maxVal * 0.25, maxVal * 0.5, maxVal * 0.75, maxVal].map(Math.round);
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <View style={styles.header}>
-        <Text style={styles.eyebrow}>// MORNING REPORT</Text>
-        <Text style={styles.title}>RECOVERY</Text>
-        <View style={styles.titleUnderline} />
+    <View style={{ flexDirection: 'row' }}>
+      {/* Y-axis labels */}
+      <View style={{ width: 32, height: CHART_H + 18 }}>
+        {yTicks.map((t, i) => {
+          const topPct = 1 - t / maxVal;
+          return (
+            <Text
+              key={i}
+              style={{
+                position: 'absolute',
+                top: topPct * CHART_H - 5,
+                right: 4,
+                fontSize: 7,
+                fontWeight: '900',
+                color: Colors.textMuted,
+                textAlign: 'right',
+              }}
+            >
+              {formatVal(t)}
+            </Text>
+          );
+        })}
       </View>
 
-      {/* Coconut grade card */}
-      <View style={[styles.cocoGradeCard, { borderColor: cocoInfo.color }]}>
-        <DiagonalStripes color={cocoInfo.color} opacity={0.05} />
-        <View style={styles.cocoGradeInner}>
-          {cocoInfo.image && (
-            <Image source={cocoInfo.image} style={styles.cocoImg} resizeMode="contain" />
-          )}
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.cocoGradeLabel, { color: cocoInfo.color }]}>{cocoInfo.label} COCO</Text>
-            <Text style={styles.cocoGradeSub}>LAST NIGHT'S GRADE</Text>
+      {/* Chart body */}
+      <View style={{ flex: 1 }}>
+        <View style={{ height: CHART_H, position: 'relative' }}>
+          {/* Horizontal grid lines */}
+          {yTicks.map((t, i) => (
+            <View
+              key={i}
+              style={{
+                position: 'absolute',
+                top: (1 - t / maxVal) * CHART_H,
+                left: 0, right: 0, height: 1,
+                backgroundColor: t === 0 ? Colors.textMuted : Colors.border,
+                opacity: t === 0 ? 0.5 : 0.35,
+              }}
+            />
+          ))}
+
+          {/* Bars */}
+          <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: '100%', gap: 3 }}>
+            {buckets.map((b, i) => {
+              const barH = b.avg !== null ? Math.max((b.avg / maxVal) * CHART_H, 3) : 0;
+              const color = b.avg !== null ? colorFn(b.avg) : 'transparent';
+              return (
+                <View key={i} style={{ flex: 1, alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
+                  {b.avg !== null && (
+                    <Text style={{ fontSize: 7, fontWeight: '900', fontStyle: 'italic', color, marginBottom: 2, textAlign: 'center' }}>
+                      {formatVal(b.avg)}
+                    </Text>
+                  )}
+                  {b.avg === null && (
+                    <Text style={{ fontSize: 7, color: Colors.textMuted, marginBottom: 2 }}>—</Text>
+                  )}
+                  <View style={{ width: '72%', height: barH, backgroundColor: b.avg !== null ? color : 'transparent' }} />
+                </View>
+              );
+            })}
           </View>
         </View>
-      </View>
 
-      {/* Score row */}
-      <View style={styles.scoreRowOuter}>
-        <DiagonalStripes />
-        <View style={styles.scoreRowInner}>
-          {[
-            { label: 'SLEEP SCORE', value: recovery.recoveryScore, color: recovScoreColor },
-            { label: 'HRV PROXY',   value: recovery.hrvProxy,      color: Colors.textPrimary },
-          ].map((s, i) => (
-            <View key={s.label} style={[styles.scoreBlock, i > 0 && styles.scoreBlockBorder]}>
-              <Text style={styles.scoreLabel}>{s.label}</Text>
-              <Text style={[styles.scoreNum, { color: s.color }]}>{s.value}</Text>
-              <View style={[styles.scoreAccent, { backgroundColor: s.color }]} />
+        {/* X-axis labels */}
+        <View style={{ flexDirection: 'row', borderTopWidth: 1, borderTopColor: Colors.border, paddingTop: 4, marginTop: 0 }}>
+          {buckets.map((b, i) => (
+            <View key={i} style={{ flex: 1, alignItems: 'center' }}>
+              <Text style={{ fontSize: 7, fontWeight: '900', letterSpacing: 0.3, color: Colors.textMuted }}>{b.label}</Text>
             </View>
           ))}
         </View>
       </View>
+    </View>
+  );
+}
 
-      {/* Stats row */}
-      <View style={styles.statsRow}>
+// Grouped 2-bar chart for "in bed" vs "asleep"
+function GroupedBarChart({ buckets }: { buckets: { label: string; inBed: number | null; asleep: number | null }[] }) {
+  const maxVal = 12;
+  const yTicks = [0, 3, 6, 9, 12];
+
+  return (
+    <View style={{ flexDirection: 'row' }}>
+      {/* Y-axis labels */}
+      <View style={{ width: 32, height: CHART_H + 18 }}>
+        {yTicks.map((t, i) => (
+          <Text
+            key={i}
+            style={{
+              position: 'absolute',
+              top: (1 - t / maxVal) * CHART_H - 5,
+              right: 4,
+              fontSize: 7, fontWeight: '900', color: Colors.textMuted, textAlign: 'right',
+            }}
+          >
+            {t}h
+          </Text>
+        ))}
+      </View>
+
+      <View style={{ flex: 1 }}>
+        <View style={{ height: CHART_H, position: 'relative' }}>
+          {/* Grid lines */}
+          {yTicks.map((t, i) => (
+            <View key={i} style={{
+              position: 'absolute', top: (1 - t / maxVal) * CHART_H,
+              left: 0, right: 0, height: 1,
+              backgroundColor: t === 0 ? Colors.textMuted : Colors.border,
+              opacity: t === 0 ? 0.5 : 0.35,
+            }} />
+          ))}
+
+          {/* Bars */}
+          <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: '100%', gap: 3 }}>
+            {buckets.map((b, i) => {
+              const bedH  = b.inBed  !== null ? Math.max((b.inBed  / maxVal) * CHART_H, 3) : 0;
+              const slpH  = b.asleep !== null ? Math.max((b.asleep / maxVal) * CHART_H, 3) : 0;
+              return (
+                <View key={i} style={{ flex: 1, alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
+                  <View style={{ flexDirection: 'row', gap: 2, alignItems: 'flex-end' }}>
+                    <View style={{ width: 10 }}>
+                      {b.inBed !== null && <Text style={{ fontSize: 6, fontWeight: '900', color: Colors.info, textAlign: 'center', marginBottom: 1 }}>{b.inBed}h</Text>}
+                      <View style={{ width: 10, height: bedH, backgroundColor: Colors.info }} />
+                    </View>
+                    <View style={{ width: 10 }}>
+                      {b.asleep !== null && <Text style={{ fontSize: 6, fontWeight: '900', color: Colors.green, textAlign: 'center', marginBottom: 1 }}>{b.asleep}h</Text>}
+                      <View style={{ width: 10, height: slpH, backgroundColor: Colors.green }} />
+                    </View>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        </View>
+
+        {/* X-axis */}
+        <View style={{ flexDirection: 'row', borderTopWidth: 1, borderTopColor: Colors.border, paddingTop: 4 }}>
+          {buckets.map((b, i) => (
+            <View key={i} style={{ flex: 1, alignItems: 'center' }}>
+              <Text style={{ fontSize: 7, fontWeight: '900', letterSpacing: 0.3, color: Colors.textMuted }}>{b.label}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+    </View>
+  );
+}
+
+// ─── Averages Section ─────────────────────────────────────────────────────────
+
+function AveragesSection({ history }: { history: ProcessedSession[] }) {
+  const [period, setPeriod] = useState<'days' | 'weeks' | 'months'>('days');
+
+  const buckets = period === 'days' ? buildDayBuckets(history)
+    : period === 'weeks' ? buildWeekBuckets(history)
+    : buildMonthBuckets(history);
+
+  const scoreBuckets = avgOf(buckets, (s) => s.recovery.recoveryScore);
+  const durBuckets   = avgOf(buckets, (s) => s.durationHours);
+  const soundBuckets = avgOf(buckets, (s) => (s.audioEvents ?? []).filter((e) => e.type !== 'quiet').length);
+
+  const sleepTimeBuckets = buckets.map((b) => ({
+    label: b.label,
+    inBed:  b.sessions.length > 0 ? parseFloat((b.sessions.reduce((a, s) => a + s.durationHours, 0) / b.sessions.length).toFixed(1)) : null,
+    asleep: b.sessions.length > 0 ? parseFloat((b.sessions.reduce((a, s) => a + s.durationHours * (s.scores.sleepEfficiency / 100), 0) / b.sessions.length).toFixed(1)) : null,
+  }));
+
+  return (
+    <View style={avgSt.container}>
+      {/* Period toggle */}
+      <View style={avgSt.toggle}>
+        {(['days', 'weeks', 'months'] as const).map((p) => (
+          <TouchableOpacity key={p} style={[avgSt.toggleBtn, period === p && avgSt.toggleActive]} onPress={() => setPeriod(p)} activeOpacity={0.7}>
+            <Text style={[avgSt.toggleText, period === p && avgSt.toggleTextActive]}>{p.toUpperCase()}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <Text style={avgSt.label}>// RECOVERY SCORE</Text>
+      <View style={avgSt.card}><BarChart buckets={scoreBuckets} maxVal={100} formatVal={(v) => `${Math.round(v)}`} colorFn={scoreColor} /></View>
+
+      <Text style={avgSt.label}>// SLEEP DURATION (HRS)</Text>
+      <View style={avgSt.card}><BarChart buckets={durBuckets} maxVal={10} formatVal={(v) => `${v}h`} colorFn={() => Colors.info} /></View>
+
+      <Text style={avgSt.label}>// SLEEP SOUNDS DETECTED</Text>
+      <View style={avgSt.card}><BarChart buckets={soundBuckets} maxVal={Math.max(10, ...soundBuckets.map((b) => b.avg ?? 0))} formatVal={(v) => `${Math.round(v)}`} colorFn={() => '#A855F7'} /></View>
+
+      <Text style={avgSt.label}>// TIME IN BED vs ASLEEP</Text>
+      <View style={avgSt.card}>
+        <GroupedBarChart buckets={sleepTimeBuckets} />
+        <View style={{ flexDirection: 'row', gap: 14, marginTop: 8 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+            <View style={{ width: 8, height: 8, backgroundColor: Colors.info }} />
+            <Text style={avgSt.legendText}>IN BED</Text>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+            <View style={{ width: 8, height: 8, backgroundColor: Colors.green }} />
+            <Text style={avgSt.legendText}>ASLEEP</Text>
+          </View>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+const avgSt = StyleSheet.create({
+  container: { marginBottom: 32 },
+  toggle: { flexDirection: 'row', borderWidth: 1, borderColor: Colors.border, alignSelf: 'flex-start', marginBottom: 16 },
+  toggleBtn: { paddingHorizontal: 16, paddingVertical: 8 },
+  toggleActive: { backgroundColor: Colors.red },
+  toggleText: { fontSize: 10, fontWeight: '900', letterSpacing: 1.5, color: Colors.textMuted },
+  toggleTextActive: { color: '#fff' },
+  label: { fontSize: 9, fontWeight: '900', fontStyle: 'italic', letterSpacing: 3, color: Colors.textMuted, marginBottom: 8 },
+  card: { backgroundColor: Colors.bgCard, borderWidth: 1, borderColor: Colors.border, borderLeftWidth: 4, borderLeftColor: Colors.red, padding: 16, marginBottom: 14 },
+  legendText: { fontSize: 8, fontWeight: '900', letterSpacing: 1.5, color: Colors.textMuted },
+});
+
+// ─── Night history browser ────────────────────────────────────────────────────
+
+const MONTH_NAMES = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+const DAY_NAMES   = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
+
+function nightChipLabel(dateStr: string) {
+  const d = new Date(dateStr);
+  return `${DAY_NAMES[d.getDay()]} ${d.getDate()}`;
+}
+
+function NightHistoryBrowser({ history, isPremium }: { history: ProcessedSession[]; isPremium: boolean }) {
+  const router = useRouter();
+  const [selected, setSelected] = useState(history[0]?.id ?? null);
+  const session = history.find((s) => s.id === selected) ?? history[0] ?? null;
+  const visible = isPremium ? history : history.slice(0, 7);
+
+  if (!session) return null;
+
+  return (
+    <View>
+      <Text style={histSt.eyebrow}>// NIGHT HISTORY</Text>
+
+      {/* Night chips */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 12 }}>
+        {visible.map((s) => {
+          const active = s.id === selected;
+          const sc = s.recovery.recoveryScore;
+          const cocoInfo = COCO_LEVELS[scoreToCocoLevel(sc)];
+          return (
+            <TouchableOpacity key={s.id} style={[histSt.chip, active && histSt.chipActive]} onPress={() => setSelected(s.id)} activeOpacity={0.75}>
+              {cocoInfo.image && <Image source={cocoInfo.image} style={histSt.chipImg} resizeMode="contain" />}
+              <Text style={[histSt.chipDate, active && { color: Colors.textPrimary }]}>{nightChipLabel(s.date)}</Text>
+              <Text style={[histSt.chipScore, { color: active ? scoreColor(sc) : Colors.textMuted }]}>{sc}</Text>
+            </TouchableOpacity>
+          );
+        })}
+        {!isPremium && history.length > 7 && (
+          <TouchableOpacity style={histSt.chipLocked} onPress={() => router.push('/paywall')}>
+            <Text style={histSt.chipLockedNum}>+{history.length - 7}</Text>
+            <Text style={histSt.chipLockedPro}>PRO</Text>
+          </TouchableOpacity>
+        )}
+      </ScrollView>
+
+      {/* Selected night panel */}
+      <NightPanel session={session} isPremium={isPremium} />
+    </View>
+  );
+}
+
+const histSt = StyleSheet.create({
+  eyebrow: { fontSize: 9, fontWeight: '900', fontStyle: 'italic', letterSpacing: 3, color: Colors.red, marginBottom: 12 },
+  chip: { alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, backgroundColor: Colors.bgCard, borderWidth: 1, borderColor: Colors.border, minWidth: 64 },
+  chipActive: { borderColor: Colors.red, backgroundColor: 'rgba(255,45,45,0.08)' },
+  chipImg: { width: 28, height: 28, marginBottom: 4 },
+  chipDate: { fontSize: 8, fontWeight: '900', fontStyle: 'italic', letterSpacing: 1, color: Colors.textMuted },
+  chipScore: { fontSize: 13, fontWeight: '900', marginTop: 2 },
+  chipLocked: { alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderColor: Colors.gold, minWidth: 52, justifyContent: 'center' },
+  chipLockedNum: { fontSize: 11, fontWeight: '900', color: Colors.gold },
+  chipLockedPro: { fontSize: 8, fontWeight: '900', color: Colors.gold, marginTop: 2 },
+});
+
+// ─── Night Panel ──────────────────────────────────────────────────────────────
+
+function NightPanel({ session, isPremium }: { session: ProcessedSession; isPremium: boolean }) {
+  const router = useRouter();
+  const [showInsights, setShowInsights] = useState(false);
+  const score    = session.recovery.recoveryScore;
+  const color    = scoreColor(score);
+  const cocoInfo = COCO_LEVELS[scoreToCocoLevel(score)];
+  const { recovery, scores, durationHours } = session;
+
+  // Stage chart events
+  const endedAt   = new Date(session.date).getTime();
+  const startedAt = endedAt - durationHours * 3_600_000;
+  const chartEvents = (session.movementEvents?.length ?? 0) > 0
+    ? session.movementEvents!
+    : generateEstimatedEvents(startedAt, endedAt, null);
+
+  // Sound events
+  const audioEvents = session.audioEvents ?? [];
+  const nonQuiet    = audioEvents.filter((e) => e.type !== 'quiet');
+  const soundCounts = {} as Record<AudioEvent['type'], number>;
+  for (const e of nonQuiet) soundCounts[e.type] = (soundCounts[e.type] ?? 0) + 1;
+  const clips = nonQuiet.filter((e) => e.clipUri);
+
+  return (
+    <View style={npSt.container}>
+      {/* Header */}
+      <View style={npSt.header}>
+        <Text style={npSt.date}>{formatDate(session.date)}</Text>
+        <View style={[npSt.srcBadge, { borderColor: session.dataSource === 'watch' ? Colors.info : Colors.textMuted }]}>
+          <Text style={[npSt.srcText, { color: session.dataSource === 'watch' ? Colors.info : Colors.textMuted }]}>
+            {session.dataSource === 'watch' ? 'WATCH' : 'PHONE'}
+          </Text>
+        </View>
+      </View>
+
+      {/* Coco grade */}
+      <View style={[npSt.gradeCard, { borderColor: cocoInfo.color }]}>
+        <DiagonalStripes color={cocoInfo.color} opacity={0.05} />
+        <View style={npSt.gradeInner}>
+          {cocoInfo.image && <Image source={cocoInfo.image} style={npSt.gradeImg} resizeMode="contain" />}
+          <View style={{ flex: 1 }}>
+            <Text style={[npSt.gradeLabel, { color: cocoInfo.color }]}>{cocoInfo.label} COCO</Text>
+            <Text style={npSt.gradeSub}>RECOVERY GRADE</Text>
+          </View>
+          <Text style={[npSt.gradeScore, { color }]}>{score}</Text>
+        </View>
+      </View>
+
+      {/* Score bar */}
+      <View style={npSt.scoreBarTrack}>
+        <View style={[npSt.scoreBarFill, { width: `${score}%` as any, backgroundColor: color }]} />
+      </View>
+
+      {/* Stats grid */}
+      <View style={npSt.statsGrid}>
         {[
-          { label: 'SLEEP TIME', value: `${durationHours.toFixed(1)}h` },
-          { label: 'CORTISOL', value: recovery.cortisolFlag ? 'HIGH' : 'OK' },
-          latestSession.watchHeartRate
-            ? { label: 'AVG HR', value: `${latestSession.watchHeartRate} bpm` }
-            : { label: 'DISRUPTIONS', value: String(latestSession.scores.disruptionCount ?? 0) },
+          { label: 'DURATION',    value: `${durationHours.toFixed(1)}h` },
+          { label: 'EFFICIENCY',  value: `${scores.sleepEfficiency}%` },
+          { label: 'HRV PROXY',   value: `${Math.round(recovery.hrvProxy)}` },
+          { label: 'LATENCY',     value: scores.sleepLatencyMinutes > 0 ? `${scores.sleepLatencyMinutes}M` : '—' },
+          { label: 'WASO',        value: scores.wasoMinutes > 0 ? `${scores.wasoMinutes}M` : '—' },
+          { label: session.watchHeartRate ? 'AVG HR' : 'DISRUPTIONS',
+            value: session.watchHeartRate ? `${session.watchHeartRate}` : `${scores.disruptionCount ?? 0}` },
         ].map((s) => (
-          <View key={s.label} style={styles.statBlock}>
-            <Text style={styles.statValue}>{s.value}</Text>
-            <Text style={styles.statLabel}>{s.label}</Text>
+          <View key={s.label} style={npSt.stat}>
+            <Text style={npSt.statNum}>{s.value}</Text>
+            <Text style={npSt.statLabel}>{s.label}</Text>
           </View>
         ))}
       </View>
 
-      {/* SEE MORE — collapsible insights */}
-      <TouchableOpacity style={styles.seeMoreBtn} onPress={() => setShowInsights((v) => !v)} activeOpacity={0.7}>
-        <Text style={styles.seeMoreText}>{showInsights ? 'HIDE INSIGHTS ↑' : 'SEE MORE ↓'}</Text>
+      {/* Insights toggle */}
+      <TouchableOpacity style={npSt.seeMoreBtn} onPress={() => setShowInsights((v) => !v)} activeOpacity={0.7}>
+        <Text style={npSt.seeMoreText}>{showInsights ? 'HIDE INSIGHTS ↑' : 'SEE MORE ↓'}</Text>
       </TouchableOpacity>
 
       {showInsights && recovery.insights.map((insight) => {
         const locked = insight.isPremium && !isPremium;
         return (
-          <View key={insight.id} style={[styles.insightOuter, { borderLeftColor: locked ? Colors.textMuted : severityColor[insight.severity] }]}>
-            <View style={[styles.insightInner, locked && styles.insightLocked]}>
-              <View style={styles.insightHeader}>
-                <Text style={[styles.insightTitle, locked && { color: Colors.textMuted }]}>{insight.title}</Text>
+          <View key={insight.id} style={[npSt.insightOuter, { borderLeftColor: locked ? Colors.textMuted : severityColor[insight.severity] }]}>
+            <View style={[npSt.insightInner, locked && { opacity: 0.7 }]}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                <Text style={[npSt.insightTitle, locked && { color: Colors.textMuted }]}>{insight.title}</Text>
                 {insight.isPremium && (
-                  <View style={[styles.proBadge, { backgroundColor: isPremium ? Colors.gold : Colors.border }]}>
-                    <Text style={[styles.proText, { color: isPremium ? Colors.bgDeep : Colors.textMuted }]}>PRO</Text>
+                  <View style={[npSt.proBadge, { backgroundColor: isPremium ? Colors.gold : Colors.border }]}>
+                    <Text style={{ fontSize: 8, fontWeight: '900', color: isPremium ? Colors.bgDeep : Colors.textMuted }}>PRO</Text>
                   </View>
                 )}
               </View>
               {locked ? (
                 <TouchableOpacity onPress={() => router.push('/paywall')}>
-                  <View style={styles.lockRow}>
-                    <Text style={styles.lockText}>UNLOCK WITH COCO PRO</Text>
-                    <Text style={styles.lockArrow}>→</Text>
-                  </View>
+                  <Text style={{ fontSize: 10, fontWeight: '900', fontStyle: 'italic', letterSpacing: 1.5, color: Colors.gold }}>UNLOCK WITH COCO PRO →</Text>
                 </TouchableOpacity>
               ) : (
-                <Text style={styles.insightBody}>{insight.body}</Text>
+                <Text style={npSt.insightBody}>{insight.body}</Text>
               )}
             </View>
           </View>
         );
       })}
 
-      {/* ── Sleep Stage Charts ─────────────────────────────────────────────── */}
-      {(() => {
-        const endedAt   = new Date(latestSession.date).getTime();
-        const startedAt = endedAt - latestSession.durationHours * 3_600_000;
-        const chartEvents = (latestSession.movementEvents?.length ?? 0) > 0
-          ? latestSession.movementEvents!
-          : generateEstimatedEvents(startedAt, endedAt, null);
-        if (chartEvents.length === 0) return null;
-        return (
-          <>
-            <Text style={styles.sectionEyebrow}>// SLEEP STAGES</Text>
-            <StageTimeline events={chartEvents} audioEvents={latestSession.audioEvents ?? []} />
-            <MovementGraph events={chartEvents} />
-          </>
-        );
-      })()}
+      {/* Stage timeline */}
+      <Text style={npSt.sectionEyebrow}>// SLEEP STAGES</Text>
+      {chartEvents.length > 0 ? (
+        <>
+          <StageTimeline events={chartEvents} audioEvents={audioEvents} />
+          <MovementGraph events={chartEvents} />
+        </>
+      ) : (
+        <View style={npSt.emptyBlock}><Text style={npSt.emptyText}>No stage data</Text></View>
+      )}
 
-      {/* ── Voice / Sound Tracking ─────────────────────────────────────────── */}
-      {(() => {
-        const events = latestSession.audioEvents ?? [];
-        const nonQuiet = events.filter((e) => e.type !== 'quiet');
-        if (nonQuiet.length === 0) return null;
-        const counts = {} as Record<AudioEvent['type'], number>;
-        for (const e of nonQuiet) counts[e.type] = (counts[e.type] ?? 0) + 1;
-        const clips = nonQuiet.filter((e) => e.clipUri);
-        return (
-          <>
-            <Text style={styles.sectionEyebrow}>// SLEEP SOUNDS</Text>
-            <View style={styles.soundsCard}>
-              <View style={styles.soundsRow}>
-                {(['snoring', 'talking', 'loud_event'] as AudioEvent['type'][])
-                  .filter((t) => counts[t] > 0)
-                  .map((t) => (
-                    <View key={t} style={styles.soundChip}>
-                      <Text style={styles.soundChipIcon}>{audioTypeIcon(t)}</Text>
-                      <Text style={styles.soundChipLabel}>{audioTypeLabel(t)}</Text>
-                      <Text style={styles.soundChipCount}>{counts[t]}×</Text>
-                    </View>
-                  ))}
-              </View>
-            </View>
-            {clips.length > 0 && (
-              <>
-                <Text style={styles.sectionEyebrow}>// RECORDED CLIPS</Text>
-                {clips.map((e, i) => <ClipRow key={i} event={e} />)}
-              </>
+      {/* Sleep sounds — ALWAYS shown */}
+      <Text style={npSt.sectionEyebrow}>// SLEEP SOUNDS</Text>
+      <View style={npSt.soundsCard}>
+        {nonQuiet.length === 0 ? (
+          <Text style={npSt.soundsEmpty}>No sounds detected this night</Text>
+        ) : (
+          <View style={npSt.soundsRow}>
+            {(['snoring', 'talking', 'loud_event'] as AudioEvent['type'][]).map((t) =>
+              soundCounts[t] > 0 ? (
+                <View key={t} style={npSt.soundChip}>
+                  <Text style={npSt.soundChipIcon}>{audioTypeIcon(t)}</Text>
+                  <Text style={npSt.soundChipLabel}>{audioTypeLabel(t)}</Text>
+                  <Text style={npSt.soundChipCount}>{soundCounts[t]}×</Text>
+                </View>
+              ) : null
             )}
-          </>
-        );
-      })()}
+          </View>
+        )}
+      </View>
 
-      <View style={{ height: 40 }} />
-    </ScrollView>
+      {/* Recorded clips with live playback */}
+      {clips.length > 0 && (
+        <>
+          <Text style={npSt.sectionEyebrow}>// RECORDED CLIPS</Text>
+          {clips.map((e, i) => <ClipRow key={i} event={e} />)}
+        </>
+      )}
+
+      <View style={{ height: 24 }} />
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.bgDeep },
-  content: { padding: 24, paddingTop: 60, paddingBottom: 48 },
-  noDataCard: { padding: 20, backgroundColor: Colors.bgCard, borderRadius: 12, borderWidth: 1, borderColor: Colors.border, marginBottom: 16 },
-  noDataText: { fontSize: 13, fontWeight: '600', fontStyle: 'italic', color: Colors.textMuted, textAlign: 'center' },
-
-  // Coco grade card
-  cocoGradeCard: {
-    backgroundColor: Colors.bgCard, borderWidth: 1.5, borderLeftWidth: 5,
-    borderRadius: 0, marginBottom: 20, overflow: 'hidden',
-    transform: [{ skewX: '-1.5deg' }],
-  },
-  cocoGradeInner: {
-    flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16,
-    transform: [{ skewX: '1.5deg' }],
-  },
-  cocoImg: { width: 80, height: 80 },
-  cocoGradeLabel: { fontSize: 20, fontWeight: '900', fontStyle: 'italic', letterSpacing: 1 },
-  cocoGradeSub: { fontSize: 9, fontWeight: '900', letterSpacing: 2, color: Colors.textMuted, marginTop: 4 },
-  recBadge: { borderWidth: 1.5, borderRadius: 0, paddingHorizontal: 10, paddingVertical: 6 },
-  recBadgeText: { fontSize: 9, fontWeight: '900', fontStyle: 'italic', letterSpacing: 1.5 },
-
-  header: { marginBottom: 24 },
-  eyebrow: { fontSize: 9, fontWeight: '900', fontStyle: 'italic', letterSpacing: 3, color: Colors.red, marginBottom: 4 },
-  title: { fontSize: 52, fontWeight: '900', fontStyle: 'italic', color: Colors.textPrimary, lineHeight: 54 },
-  titleUnderline: { height: 3, width: 60, backgroundColor: Colors.red, marginTop: 6, marginBottom: 4 },
-
-  scoreRowOuter: {
-    backgroundColor: Colors.bgCard, borderRadius: 0,
-    borderWidth: 1.5, borderColor: Colors.red,
-    borderLeftWidth: 5, borderLeftColor: Colors.red,
-    marginBottom: 14, overflow: 'hidden',
-    transform: [{ skewX: '-1.5deg' }],
-  },
-  scoreRowInner: { flexDirection: 'row', padding: 20, transform: [{ skewX: '1.5deg' }] },
-  scoreBlock: { flex: 1, alignItems: 'center' },
-  scoreBlockBorder: { borderLeftWidth: 1, borderLeftColor: Colors.border },
-  scoreLabel: { fontSize: 8, fontWeight: '900', fontStyle: 'italic', letterSpacing: 1.5, color: Colors.textMuted, marginBottom: 6 },
-  scoreNum: { fontSize: 38, fontWeight: '900', fontStyle: 'italic' },
-  scoreAccent: { height: 2, width: 28, marginTop: 6 },
-
-  recOuter: {
-    borderRadius: 0, borderWidth: 1.5,
-    borderLeftWidth: 5, marginBottom: 16,
-    backgroundColor: Colors.bgCard, overflow: 'hidden',
-    transform: [{ skewX: '-1.5deg' }],
-  },
-  recInner: { padding: 18, transform: [{ skewX: '1.5deg' }] },
-  recLabel: { fontSize: 9, fontWeight: '900', fontStyle: 'italic', letterSpacing: 2, marginBottom: 4 },
-  recValue: { fontSize: 24, fontWeight: '900', fontStyle: 'italic', letterSpacing: 1 },
-
-  sourceBadge: { borderWidth: 1.5, borderRadius: 0, paddingHorizontal: 12, paddingVertical: 6, alignSelf: 'flex-start', marginBottom: 16 },
-  sourceBadgeText: { fontSize: 9, fontWeight: '900', fontStyle: 'italic', letterSpacing: 2 },
-
-  statsRow: { flexDirection: 'row', gap: 10, marginBottom: 28 },
-  statBlock: {
-    flex: 1, backgroundColor: Colors.bgCard, borderRadius: 0, padding: 14,
-    alignItems: 'center', borderWidth: 1, borderColor: Colors.border,
-    borderLeftWidth: 3, borderLeftColor: Colors.red,
-  },
-  statValue: { fontSize: 14, fontWeight: '900', fontStyle: 'italic', color: Colors.textPrimary, marginBottom: 4 },
-  statLabel: { fontSize: 8, fontWeight: '900', letterSpacing: 1.5, color: Colors.textMuted },
-
-  sectionLabel: { fontSize: 9, fontWeight: '900', fontStyle: 'italic', letterSpacing: 3, color: Colors.textSecondary, marginBottom: 12, textTransform: 'uppercase' },
-  seeMoreBtn: {
-    borderWidth: 1, borderColor: Colors.border, paddingVertical: 14, alignItems: 'center', marginBottom: 14,
-    borderLeftWidth: 3, borderLeftColor: Colors.red,
-  },
+const npSt = StyleSheet.create({
+  container: { marginTop: 4 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
+  date: { fontSize: 16, fontWeight: '900', fontStyle: 'italic', color: Colors.textPrimary, letterSpacing: 1 },
+  srcBadge: { borderWidth: 1.5, paddingHorizontal: 8, paddingVertical: 4 },
+  srcText: { fontSize: 8, fontWeight: '900', letterSpacing: 2 },
+  gradeCard: { borderWidth: 2, borderLeftWidth: 5, marginBottom: 8, backgroundColor: Colors.bgCard, overflow: 'hidden' },
+  gradeInner: { flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12 },
+  gradeImg: { width: 60, height: 60 },
+  gradeLabel: { fontSize: 18, fontWeight: '900', fontStyle: 'italic', letterSpacing: 1 },
+  gradeSub: { fontSize: 8, fontWeight: '900', letterSpacing: 2, color: Colors.textMuted, marginTop: 3 },
+  gradeScore: { fontSize: 42, fontWeight: '900', fontStyle: 'italic' },
+  scoreBarTrack: { height: 4, backgroundColor: Colors.border, marginBottom: 12, overflow: 'hidden' },
+  scoreBarFill: { height: '100%' },
+  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 14, gap: 1, backgroundColor: Colors.border },
+  stat: { width: '33.33%', backgroundColor: Colors.bgCard, padding: 12, alignItems: 'center' },
+  statNum: { fontSize: 15, fontWeight: '900', fontStyle: 'italic', color: Colors.textPrimary },
+  statLabel: { fontSize: 7, fontWeight: '900', letterSpacing: 1.5, color: Colors.textMuted, marginTop: 3 },
+  seeMoreBtn: { borderWidth: 1, borderColor: Colors.border, paddingVertical: 12, alignItems: 'center', marginBottom: 14, borderLeftWidth: 3, borderLeftColor: Colors.red },
   seeMoreText: { fontSize: 10, fontWeight: '900', fontStyle: 'italic', letterSpacing: 3, color: Colors.textSecondary },
-
-  insightOuter: {
-    backgroundColor: Colors.bgCard, borderRadius: 0, borderWidth: 1, borderColor: Colors.border,
-    borderLeftWidth: 4, marginBottom: 10, overflow: 'hidden',
-  },
-  insightInner: { padding: 16 },
-  insightHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
-  insightTitle: { fontSize: 12, fontWeight: '900', fontStyle: 'italic', letterSpacing: 0.5, color: Colors.textPrimary, flex: 1 },
-  proBadge: { backgroundColor: Colors.gold, borderRadius: 0, paddingHorizontal: 6, paddingVertical: 2 },
-  proText: { fontSize: 8, fontWeight: '900', color: Colors.bgDeep },
+  insightOuter: { backgroundColor: Colors.bgCard, borderWidth: 1, borderColor: Colors.border, borderLeftWidth: 4, marginBottom: 10 },
+  insightInner: { padding: 14 },
+  insightTitle: { fontSize: 12, fontWeight: '900', fontStyle: 'italic', color: Colors.textPrimary, flex: 1 },
+  proBadge: { paddingHorizontal: 6, paddingVertical: 2 },
   insightBody: { fontSize: 13, color: Colors.textSecondary, lineHeight: 19 },
-  insightLocked: { opacity: 0.7 },
-  lockRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
-  lockText: { fontSize: 10, fontWeight: '900', fontStyle: 'italic', letterSpacing: 1.5, color: Colors.gold },
-  lockArrow: { fontSize: 12, color: Colors.gold, fontWeight: '900' },
-
   sectionEyebrow: { fontSize: 9, fontWeight: '900', fontStyle: 'italic', letterSpacing: 3, color: Colors.textMuted, marginTop: 20, marginBottom: 10 },
-
-  soundsCard: { backgroundColor: Colors.bgCard, borderWidth: 1, borderColor: Colors.border, borderLeftWidth: 4, borderLeftColor: Colors.info, marginBottom: 12, padding: 12 },
+  emptyBlock: { backgroundColor: Colors.bgCard, borderWidth: 1, borderColor: Colors.border, padding: 18, alignItems: 'center', marginBottom: 10 },
+  emptyText: { fontSize: 11, color: Colors.textMuted, fontStyle: 'italic' },
+  soundsCard: { backgroundColor: Colors.bgCard, borderWidth: 1, borderColor: Colors.border, borderLeftWidth: 4, borderLeftColor: '#A855F7', padding: 12, marginBottom: 10 },
+  soundsEmpty: { fontSize: 11, color: Colors.textMuted, fontStyle: 'italic' },
   soundsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   soundChip: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: Colors.bgDeep, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 8, paddingVertical: 5 },
   soundChipIcon: { fontSize: 12 },
   soundChipLabel: { fontSize: 9, fontWeight: '900', fontStyle: 'italic', color: Colors.textSecondary },
   soundChipCount: { fontSize: 9, fontWeight: '900', color: Colors.textMuted },
-
-  clipRow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: Colors.bgCard, borderWidth: 1, borderColor: Colors.border, borderLeftWidth: 3, borderLeftColor: Colors.info, padding: 12, marginBottom: 6 },
-  clipIcon: { fontSize: 18 },
-  clipType: { fontSize: 10, fontWeight: '900', fontStyle: 'italic', letterSpacing: 1 },
-  clipTime: { fontSize: 10, color: Colors.textMuted, marginTop: 2 },
-  clipPlayBtn: { borderWidth: 1.5, borderColor: Colors.border, paddingHorizontal: 12, paddingVertical: 6 },
-  clipPlayText: { fontSize: 11, fontWeight: '900' },
-
-  empty: { flex: 1, backgroundColor: Colors.bgDeep, alignItems: 'center', justifyContent: 'center', padding: 40 },
-  emptyEmoji: { fontSize: 60, marginBottom: 20 },
-  emptyTitle: { fontSize: 28, fontWeight: '900', fontStyle: 'italic', color: Colors.textPrimary, marginBottom: 8 },
-  emptyBar: { height: 3, width: 40, backgroundColor: Colors.red, marginBottom: 16 },
-  emptySub: { fontSize: 14, color: Colors.textSecondary, textAlign: 'center', lineHeight: 22 },
 });
 
-// ─── Clip playback row ────────────────────────────────────────────────────────
+// ─── Clip Row ─────────────────────────────────────────────────────────────────
 
 function ClipRow({ event }: { event: AudioEvent }) {
-  const player = useAudioPlayer(event.clipUri ? { uri: event.clipUri } : null as any);
+  const player  = useAudioPlayer(event.clipUri ? { uri: event.clipUri } : null as any);
   const [playing, setPlaying] = useState(false);
 
   const typeColor =
@@ -307,24 +578,73 @@ function ClipRow({ event }: { event: AudioEvent }) {
     else { player.seekTo(0); player.play(); setPlaying(true); }
   }
 
-  function formatClockTime(ts: number) {
-    const d = new Date(ts);
-    const h = d.getHours(), m = d.getMinutes();
-    return `${h % 12 || 12}:${m.toString().padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
-  }
-
   return (
-    <View style={styles.clipRow}>
-      <Text style={styles.clipIcon}>{audioTypeIcon(event.type)}</Text>
+    <View style={clipSt.row}>
+      <Text style={clipSt.icon}>{audioTypeIcon(event.type)}</Text>
       <View style={{ flex: 1 }}>
-        <Text style={[styles.clipType, { color: typeColor }]}>{audioTypeLabel(event.type)}</Text>
-        <Text style={styles.clipTime}>{formatClockTime(event.timestamp)}</Text>
+        <Text style={[clipSt.type, { color: typeColor }]}>{audioTypeLabel(event.type)}</Text>
+        <Text style={clipSt.time}>{formatClockTime(event.timestamp)}</Text>
       </View>
       {event.clipUri && (
-        <TouchableOpacity onPress={toggle} style={[styles.clipPlayBtn, playing && { borderColor: typeColor }]}>
-          <Text style={[styles.clipPlayText, { color: typeColor }]}>{playing ? '■' : '▶'}</Text>
+        <TouchableOpacity onPress={toggle} style={[clipSt.playBtn, playing && { borderColor: typeColor }]}>
+          <Text style={[clipSt.playText, { color: typeColor }]}>{playing ? '■' : '▶'}</Text>
         </TouchableOpacity>
       )}
     </View>
   );
 }
+
+const clipSt = StyleSheet.create({
+  row: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: Colors.bgCard, borderWidth: 1, borderColor: Colors.border, borderLeftWidth: 3, borderLeftColor: Colors.info, padding: 12, marginBottom: 6 },
+  icon: { fontSize: 18 },
+  type: { fontSize: 10, fontWeight: '900', fontStyle: 'italic', letterSpacing: 1 },
+  time: { fontSize: 10, color: Colors.textMuted, marginTop: 2 },
+  playBtn: { borderWidth: 1.5, borderColor: Colors.border, paddingHorizontal: 12, paddingVertical: 6 },
+  playText: { fontSize: 11, fontWeight: '900' },
+});
+
+// ─── Main screen ──────────────────────────────────────────────────────────────
+
+export default function ReportScreen() {
+  const { history } = useRecoveryStore();
+  const { isPremium } = usePurchaseStore();
+
+  if (history.length === 0) {
+    return (
+      <View style={styles.emptyFull}>
+        <Text style={styles.emptyTitle}>NO DATA YET.</Text>
+        <View style={styles.emptyBar} />
+        <Text style={styles.emptySub}>Complete a sleep session to see your statistics.</Text>
+      </View>
+    );
+  }
+
+  return (
+    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <View style={styles.header}>
+        <Text style={styles.eyebrow}>// COCO</Text>
+        <Text style={styles.title}>STATISTICS</Text>
+        <View style={styles.titleUnderline} />
+      </View>
+
+      <AveragesSection history={history} />
+
+      <NightHistoryBrowser history={history} isPremium={isPremium} />
+
+      <View style={{ height: 40 }} />
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: Colors.bgDeep },
+  content: { padding: 24, paddingTop: 60, paddingBottom: 48 },
+  header: { marginBottom: 24 },
+  eyebrow: { fontSize: 9, fontWeight: '900', fontStyle: 'italic', letterSpacing: 3, color: Colors.red, marginBottom: 4 },
+  title: { fontSize: 52, fontWeight: '900', fontStyle: 'italic', color: Colors.textPrimary, lineHeight: 54 },
+  titleUnderline: { height: 3, width: 60, backgroundColor: Colors.red, marginTop: 6, marginBottom: 4 },
+  emptyFull: { flex: 1, backgroundColor: Colors.bgDeep, alignItems: 'center', justifyContent: 'center', padding: 40 },
+  emptyTitle: { fontSize: 28, fontWeight: '900', fontStyle: 'italic', color: Colors.textPrimary, marginBottom: 8 },
+  emptyBar: { height: 3, width: 40, backgroundColor: Colors.red, marginBottom: 16 },
+  emptySub: { fontSize: 14, color: Colors.textSecondary, textAlign: 'center', lineHeight: 22 },
+});

@@ -9,11 +9,13 @@ import { Colors } from '../../constants/colors';
 import { DiagonalStripes } from '../../components/DiagonalStripes';
 import { useAuthStore } from '../../store/authStore';
 import { usePurchaseStore } from '../../store/purchaseStore';
+import { useRecoveryStore } from '../../store/recoveryStore';
+import { useCocoStore } from '../../store/cocoStore';
 import { ProGate } from '../../components/ProGate';
 import {
   fetchGlobalLeaderboard, fetchFriendsLeaderboard, fetchGroupLeaderboard,
   searchUser, addFriend, LeaderboardEntry, LeaderboardGroup, LeagueDetailStats,
-  fetchUserGroups, createGroup, joinGroupByCode, leaveGroup,
+  fetchUserGroups, createGroup, joinGroupByCode, leaveGroup, tierEmojiFromStreak,
 } from '../../lib/leaderboard';
 import { scheduleLeagueRivalNotification } from '../../utils/notifications';
 
@@ -68,6 +70,8 @@ function countdownLabel(endsAt: string): string {
 export default function LeaderboardScreen() {
   const { userId, username, isAuthenticated } = useAuthStore();
   const { isPremium } = usePurchaseStore();
+  const { history } = useRecoveryStore();
+  const { streak } = useCocoStore();
   const [tab, setTab] = useState<Tab>('global');
   const [global, setGlobal] = useState<LeaderboardEntry[]>([]);
   const [friends, setFriends] = useState<LeaderboardEntry[]>([]);
@@ -245,10 +249,37 @@ export default function LeaderboardScreen() {
     await Share.share({ message });
   }
 
+  function buildLocalEntry(): LeaderboardEntry | null {
+    if (!userId) return null;
+    const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const recent = history.filter((s) => new Date(s.date).getTime() >= sevenDaysAgo);
+    if (recent.length === 0) return null;
+    const scores = recent.map((s) => s.recovery.recoveryScore);
+    return {
+      userId,
+      username: username || 'You',
+      avgScore: Math.round(scores.reduce((a, b) => a + b, 0) / scores.length),
+      bestScore: Math.max(...scores),
+      streak,
+      nights: recent.length,
+      tierEmoji: tierEmojiFromStreak(streak),
+    };
+  }
+
   function getEntries(): LeaderboardEntry[] {
-    if (tab === 'global') return global;
-    if (tab === 'friends') return friends;
-    return groupEntries[tab] ?? [];
+    let entries: LeaderboardEntry[];
+    if (tab === 'global') entries = global;
+    else if (tab === 'friends') entries = friends;
+    else entries = groupEntries[tab] ?? [];
+
+    // Always ensure current user appears — inject local data if Supabase is missing them
+    if (userId && !entries.some((e) => e.userId === userId)) {
+      const local = buildLocalEntry();
+      if (local) {
+        entries = [...entries, local].sort((a, b) => b.avgScore - a.avgScore);
+      }
+    }
+    return entries;
   }
 
   const activeGroup = groups.find((g) => g.id === tab);

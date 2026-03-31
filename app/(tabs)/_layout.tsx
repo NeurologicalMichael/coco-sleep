@@ -41,7 +41,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
+          title: 'Sleep',
           tabBarIcon: ({ focused }) => tabIcon(focused, 'moon', 'moon-outline'),
         }}
       />
@@ -59,7 +59,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="report"
         options={{
-          title: 'Report',
+          title: 'Statistics',
           tabBarIcon: ({ focused }) => tabIcon(focused, 'stats-chart', 'stats-chart-outline'),
         }}
       />

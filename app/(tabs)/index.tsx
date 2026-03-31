@@ -12,7 +12,7 @@ import { useAuthStore } from '../../store/authStore';
 import { useActivityStore } from '../../store/activityStore';
 import { useRecoveryStore, ProcessedSession } from '../../store/recoveryStore';
 import { getTierForLevel } from '../../constants/tiers';
-import { scoreToCocoLevel, COCO_LEVELS, streakToGrowthStage, cocoTalk, GROWTH_STAGE_IMAGES } from '../../constants/cocoLevels';
+import { scoreToCocoLevel, COCO_LEVELS, streakToGrowthStage, GROWTH_STAGE_IMAGES } from '../../constants/cocoLevels';
 import { useSleepStore, DataSource } from '../../store/sleepStore';
 import { useSleepTracking } from '../../hooks/useSleepTracking';
 import { useLocationAutoStop } from '../../hooks/useLocationAutoStop';
@@ -174,7 +174,7 @@ export default function HomeScreen() {
     prevHistoryLen.current = history.length;
   }, [history.length]);
 
-  // Pulse animation
+  // ── Pulse animation (tracking ring) ─────────────────────────────────────────
   const pulseScale = useRef(new Animated.Value(1)).current;
   const pulseAnim  = useRef<Animated.CompositeAnimation | null>(null);
   useEffect(() => {
@@ -195,6 +195,78 @@ export default function HomeScreen() {
   const pulseStyle = {
     transform: [{ scale: pulseScale }],
     opacity: pulseScale.interpolate({ inputRange: [1, 1.6], outputRange: [1, 0.4] }),
+  };
+
+  // ── Coco idle animation (float + breathe + sway, scales with level) ──────────
+  const cocoFloatY     = useRef(new Animated.Value(0)).current;
+  const cocoBreath     = useRef(new Animated.Value(1)).current;
+  const cocoSwayX      = useRef(new Animated.Value(0)).current;
+  const cocoIdleAnim   = useRef<Animated.CompositeAnimation | null>(null);
+  const cocoSleepBreath = useRef(new Animated.Value(1)).current;
+  const cocoSleepFloat  = useRef(new Animated.Value(0)).current;
+  const cocoSleepAnim   = useRef<Animated.CompositeAnimation | null>(null);
+
+  useEffect(() => {
+    // Amplitude scales with cocoLevel
+    const floatAmp  = cocoLevel < 3 ? 5  : cocoLevel < 6 ? 7  : cocoLevel < 9 ? 9  : 11;
+    const breathAmp = cocoLevel < 3 ? 1.022 : cocoLevel < 6 ? 1.032 : cocoLevel < 9 ? 1.042 : 1.052;
+    const swayAmp   = cocoLevel < 6 ? 0  : cocoLevel < 9 ? 2.5 : 4;
+    const period    = cocoLevel < 3 ? 3200 : cocoLevel < 6 ? 2800 : cocoLevel < 9 ? 2400 : 2100;
+
+    cocoIdleAnim.current?.stop();
+    cocoSleepAnim.current?.stop();
+
+    if (!isTracking) {
+      // Idle: float + breathe + optional sway, all in sync
+      const floatLoop = Animated.loop(Animated.sequence([
+        Animated.timing(cocoFloatY, { toValue: -floatAmp, duration: period / 2, useNativeDriver: true }),
+        Animated.timing(cocoFloatY, { toValue: 0,         duration: period / 2, useNativeDriver: true }),
+      ]));
+      const breathLoop = Animated.loop(Animated.sequence([
+        Animated.timing(cocoBreath, { toValue: breathAmp, duration: period / 2, useNativeDriver: true }),
+        Animated.timing(cocoBreath, { toValue: 1,         duration: period / 2, useNativeDriver: true }),
+      ]));
+      const animations: Animated.CompositeAnimation[] = [floatLoop, breathLoop];
+      if (swayAmp > 0) {
+        animations.push(Animated.loop(Animated.sequence([
+          Animated.timing(cocoSwayX, { toValue: swayAmp,  duration: (period * 0.7) / 2, useNativeDriver: true }),
+          Animated.timing(cocoSwayX, { toValue: -swayAmp, duration: (period * 0.7) / 2, useNativeDriver: true }),
+          Animated.timing(cocoSwayX, { toValue: 0,        duration: (period * 0.3) / 2, useNativeDriver: true }),
+        ])));
+      }
+      cocoIdleAnim.current = Animated.parallel(animations);
+      cocoIdleAnim.current.start();
+    } else {
+      // Sleep mode: slower, dreamier float + gentle breath
+      cocoFloatY.setValue(0); cocoBreath.setValue(1); cocoSwayX.setValue(0);
+      cocoSleepAnim.current = Animated.parallel([
+        Animated.loop(Animated.sequence([
+          Animated.timing(cocoSleepFloat, { toValue: -6, duration: 2800, useNativeDriver: true }),
+          Animated.timing(cocoSleepFloat, { toValue: 0,  duration: 2800, useNativeDriver: true }),
+        ])),
+        Animated.loop(Animated.sequence([
+          Animated.timing(cocoSleepBreath, { toValue: 1.025, duration: 2800, useNativeDriver: true }),
+          Animated.timing(cocoSleepBreath, { toValue: 1,     duration: 2800, useNativeDriver: true }),
+        ])),
+      ]);
+      cocoSleepAnim.current.start();
+    }
+
+    return () => { cocoIdleAnim.current?.stop(); cocoSleepAnim.current?.stop(); };
+  }, [isTracking, cocoLevel]);
+
+  const cocoIdleStyle = {
+    transform: [
+      { translateY: cocoFloatY },
+      { translateX: cocoSwayX },
+      { scale: cocoBreath },
+    ],
+  };
+  const cocoSleepStyle = {
+    transform: [
+      { translateY: cocoSleepFloat },
+      { scale: cocoSleepBreath },
+    ],
   };
 
   useSleepTracking(isTracking && dataSource === 'phone', undefined);
@@ -379,6 +451,11 @@ export default function HomeScreen() {
           <Text style={[styles.stageName, { color: stageColor }]}>{stageCfg.label}</Text>
           <Text style={styles.stageSub}>{stageCfg.sub}</Text>
 
+          {/* Coco sleeping — gentle float + breathe */}
+          <Animated.View style={[styles.cocoSleepWrap, cocoSleepStyle]}>
+            <Image source={cocoSubImg} style={styles.cocoSleepImg} resizeMode="contain" />
+          </Animated.View>
+
           <View style={styles.pulseContainer}>
             <Animated.View style={[styles.pulseRing, { borderColor: stageColor }, pulseStyle]} />
             <View style={[styles.pulseDot, { backgroundColor: stageColor }]} />
@@ -471,14 +548,13 @@ export default function HomeScreen() {
 
         {/* ── Coco Growth Card ─────────────────────────────────────────── */}
         {(() => {
-          const lastScore = latestSession?.recovery.recoveryScore ?? null;
-          const message   = cocoTalk(lastScore, streak);
-
           return (
             <View style={styles.growthHero}>
-              {/* Coco hero image */}
+              {/* Coco hero image — animated idle */}
               <View style={styles.growthHeroWrap}>
-                <Image source={cocoSubImg} style={styles.growthHeroImg} resizeMode="contain" />
+                <Animated.View style={cocoIdleStyle}>
+                  <Image source={cocoSubImg} style={styles.growthHeroImg} resizeMode="contain" />
+                </Animated.View>
               </View>
 
               {/* Level — grand metallic gold */}
@@ -488,16 +564,22 @@ export default function HomeScreen() {
 
               {/* Stage name */}
               <Text style={[styles.growthStageName, { color: cocoGrowth.color }]}>{cocoGrowth.name}</Text>
-              <Text style={styles.growthStageDesc}>{cocoGrowth.description}</Text>
 
-              {/* Coco message */}
-              <Text style={styles.growthMessage}>"{message}"</Text>
-
-              {/* Streak pill */}
-              <View style={[styles.growthStreakBadge, { backgroundColor: cocoGrowth.color }]}>
-                <Text style={styles.growthStreakLabel}>STREAK</Text>
-                <Text style={styles.growthStreakNum}>{streak}</Text>
-              </View>
+              {/* Streak — golden glow, brighter with more days */}
+              {(() => {
+                const t = Math.min(streak / 14, 1);
+                const r = 1.0;
+                const g = 1.0 - 0.22 * t;
+                const b = 1.0 - 0.74 * t;
+                const streakHex = `rgb(${Math.round(r*255)},${Math.round(g*255)},${Math.round(b*255)})`;
+                const glowRadius = 4 + 20 * t;
+                return (
+                  <View style={styles.growthStreakBadge}>
+                    <Text style={[styles.growthStreakNum, { color: streakHex, textShadowColor: streakHex, textShadowRadius: glowRadius }]}>{streak}</Text>
+                    <Text style={[styles.growthStreakLabel, { color: streakHex, opacity: 0.8 }]}>DAY STREAK</Text>
+                  </View>
+                );
+              })()}
             </View>
           );
         })()}
@@ -511,7 +593,7 @@ export default function HomeScreen() {
               <View style={[styles.scoreAccent, { backgroundColor: recScoreColor }]} />
               <Text style={styles.scoreSub}>{latestSession?.recovery.performanceForecast}</Text>
               <TouchableOpacity onPress={() => router.push('/(tabs)/report')}>
-                <Text style={styles.reportLink}>VIEW FULL REPORT →</Text>
+                <Text style={styles.reportLink}>VIEW STATISTICS →</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -572,86 +654,20 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* ── Sleep Log ── */}
-        <View style={styles.sleepLogHeader}>
-          <Text style={styles.sectionEyebrow}>// SLEEP LOG</Text>
-          {totalNights > 0 && (
-            <Text style={styles.avgBadge}>{avgRecovery} AVG</Text>
-          )}
-        </View>
-
-        {totalNights === 0 ? (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyGlyph}>ZZZ</Text>
-            <Text style={styles.emptyTitle}>NO NIGHTS LOGGED</Text>
-            <Text style={styles.emptySub}>Track your first night tonight.{'\n'}Coco will be watching.</Text>
-          </View>
-        ) : (
-          <>
-            {/* Night selector — horizontal scroll, inline */}
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.nightPickerRow}
-            >
-              {visibleHistory.map((session) => {
-                const active = selectedTab === session.id;
-                const sc = session.recovery.recoveryScore;
-                const cocoInfo = COCO_LEVELS[scoreToCocoLevel(sc)];
-                return (
-                  <TouchableOpacity
-                    key={session.id}
-                    style={[styles.nightChip, active && styles.nightChipActive]}
-                    onPress={() => setSelectedTab(session.id)}
-                    activeOpacity={0.7}
-                  >
-                    {cocoInfo.image && (
-                      <Image source={cocoInfo.image} style={styles.nightChipImg} resizeMode="contain" />
-                    )}
-                    <Text style={[styles.nightChipDate, active && { color: Colors.textPrimary }]}>
-                      {nightTabLabel(session.date)}
-                    </Text>
-                    <Text style={[styles.nightChipScore, { color: active ? scoreColor(sc) : Colors.textMuted }]}>
-                      {sc}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-              {!isPremium && history.length > 7 && (
-                <TouchableOpacity style={styles.nightChipLocked} onPress={() => router.push('/paywall')}>
-                  <Text style={styles.nightChipLockedLabel}>+{history.length - 7}</Text>
-                  <Text style={styles.nightChipLockedSub}>PRO</Text>
-                </TouchableOpacity>
-              )}
-            </ScrollView>
-
-            {/* Selected night detail — inline, no separate scroll pane */}
-            {selectedSession && (
-              <NightPanel session={selectedSession} isPremium={isPremium} />
-            )}
-          </>
-        )}
-
         {/* Bottom padding for CTA */}
         <View style={{ height: 100 }} />
       </ScrollView>
 
-      {/* BEGIN SLEEP CTA */}
+      {/* TRACK TONIGHT CTA */}
       <View style={styles.ctaBar}>
-        <View style={styles.ctaRow}>
-          <View style={styles.ctaEmojiCol}>
-            <Text style={styles.ctaEmoji}>{TIER_EMOJI[Math.min(tier, TIER_EMOJI.length - 1)]}</Text>
-            <Text style={styles.ctaStreakLabel}>{streak} {streak === 1 ? 'Day' : 'Days'}</Text>
-          </View>
-          <TouchableOpacity onPress={() => setShowSetupModal(true)} activeOpacity={0.85} style={{ flex: 1 }}>
-            <View style={styles.ctaBtnOuter}>
-              <DiagonalStripes color={Colors.red} opacity={0.12} />
-              <View style={styles.ctaBtnInner}>
-                <Text style={styles.ctaBtnText}>BEGIN SLEEP</Text>
-              </View>
+        <TouchableOpacity onPress={() => setShowSetupModal(true)} activeOpacity={0.85}>
+          <View style={styles.ctaBtnOuter}>
+            <DiagonalStripes color={Colors.red} opacity={0.12} />
+            <View style={styles.ctaBtnInner}>
+              <Text style={styles.ctaBtnText}>TRACK TONIGHT</Text>
             </View>
-          </TouchableOpacity>
-        </View>
+          </View>
+        </TouchableOpacity>
       </View>
 
       {/* Setup modal */}
@@ -955,12 +971,10 @@ const styles = StyleSheet.create({
     color: Colors.textMuted, marginTop: 8,
   },
   growthStreakBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingHorizontal: 16, paddingVertical: 6, borderRadius: 20,
-    marginTop: 12,
+    alignItems: 'center', marginTop: 16,
   },
-  growthStreakLabel: { fontSize: 8, fontWeight: '900', letterSpacing: 2, color: '#000', opacity: 0.65 },
-  growthStreakNum: { fontSize: 18, fontWeight: '900', color: '#000' },
+  growthStreakLabel: { fontSize: 10, fontWeight: '900', letterSpacing: 3, textShadowOffset: { width: 0, height: 0 } },
+  growthStreakNum: { fontSize: 72, fontWeight: '900', fontStyle: 'italic', lineHeight: 76, textShadowOffset: { width: 0, height: 0 } },
   growthStageRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginBottom: 6 },
   growthStageName: { fontSize: 15, fontWeight: '900', fontStyle: 'italic', letterSpacing: 3, marginBottom: 2 },
   growthStageDesc: { fontSize: 10, color: Colors.textMuted, fontStyle: 'italic', marginBottom: 6 },
@@ -1080,15 +1094,13 @@ const styles = StyleSheet.create({
 
   // CTA
   ctaBar: { paddingHorizontal: 16, paddingBottom: 12, paddingTop: 10, backgroundColor: Colors.bgDeep, borderTopWidth: 1, borderTopColor: Colors.border },
-  ctaRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  ctaEmojiCol: { alignItems: 'center', width: 48 },
-  ctaEmoji: { fontSize: 28 },
-  ctaStreakLabel: { fontSize: 9, fontWeight: '900', fontStyle: 'italic', letterSpacing: 1, color: Colors.textMuted, marginTop: 2 },
   ctaBtnOuter: { overflow: 'hidden' },
   ctaBtnInner: { backgroundColor: Colors.red, paddingVertical: 16, alignItems: 'center', transform: [{ skewX: '-1.5deg' }] },
   ctaBtnText: { fontSize: 13, fontWeight: '900', fontStyle: 'italic', letterSpacing: 2, color: '#fff', transform: [{ skewX: '1.5deg' }] },
 
   // Tracking
+  cocoSleepWrap: { marginBottom: 8, alignItems: 'center' },
+  cocoSleepImg: { width: 100, height: 100, opacity: 0.85 },
   trackingScreen: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, paddingBottom: 120 },
   trackingTopBar: { position: 'absolute', top: 56, alignItems: 'center' },
   trackingSourcePill: { borderWidth: 2, paddingHorizontal: 20, paddingVertical: 6 },
