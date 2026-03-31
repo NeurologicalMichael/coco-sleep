@@ -636,16 +636,22 @@ export default function HomeScreen() {
         <View style={{ height: 100 }} />
       </ScrollView>
 
-      {/* TRACK TONIGHT CTA */}
+      {/* BEGIN SLEEP CTA */}
       <View style={styles.ctaBar}>
-        <TouchableOpacity onPress={() => setShowSetupModal(true)} activeOpacity={0.85}>
-          <View style={styles.ctaBtnOuter}>
-            <DiagonalStripes color={Colors.red} opacity={0.12} />
-            <View style={styles.ctaBtnInner}>
-              <Text style={styles.ctaBtnText}>TRACK TONIGHT</Text>
-            </View>
+        <View style={styles.ctaRow}>
+          <View style={styles.ctaEmojiCol}>
+            <Text style={styles.ctaEmoji}>{TIER_EMOJI[Math.min(tier, TIER_EMOJI.length - 1)]}</Text>
+            <Text style={styles.ctaStreakLabel}>{streak} {streak === 1 ? 'Day' : 'Days'}</Text>
           </View>
-        </TouchableOpacity>
+          <TouchableOpacity onPress={() => setShowSetupModal(true)} activeOpacity={0.85} style={{ flex: 1 }}>
+            <View style={styles.ctaBtnOuter}>
+              <DiagonalStripes color={Colors.red} opacity={0.12} />
+              <View style={styles.ctaBtnInner}>
+                <Text style={styles.ctaBtnText}>BEGIN SLEEP</Text>
+              </View>
+            </View>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Setup modal */}
@@ -1074,6 +1080,10 @@ const styles = StyleSheet.create({
 
   // CTA
   ctaBar: { paddingHorizontal: 16, paddingBottom: 12, paddingTop: 10, backgroundColor: Colors.bgDeep, borderTopWidth: 1, borderTopColor: Colors.border },
+  ctaRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  ctaEmojiCol: { alignItems: 'center', width: 48 },
+  ctaEmoji: { fontSize: 28 },
+  ctaStreakLabel: { fontSize: 9, fontWeight: '900', fontStyle: 'italic', letterSpacing: 1, color: Colors.textMuted, marginTop: 2 },
   ctaBtnOuter: { overflow: 'hidden' },
   ctaBtnInner: { backgroundColor: Colors.red, paddingVertical: 16, alignItems: 'center', transform: [{ skewX: '-1.5deg' }] },
   ctaBtnText: { fontSize: 13, fontWeight: '900', fontStyle: 'italic', letterSpacing: 2, color: '#fff', transform: [{ skewX: '1.5deg' }] },
