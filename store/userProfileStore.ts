@@ -28,13 +28,17 @@ export interface PersonalPlan {
   timeline: string;
 }
 
+export type FitnessLevel = 'beginner' | 'intermediate' | 'advanced';
+
 interface UserProfileStore {
-  ageRange:         AgeRange | null;
-  gender:           Gender | null;
-  sleepStruggles:   SleepStruggle[];
-  healthConditions: HealthCondition[];
-  goals:            SleepGoal[];
-  personalPlan:     PersonalPlan | null;
+  ageRange:                 AgeRange | null;
+  gender:                   Gender | null;
+  sleepStruggles:           SleepStruggle[];
+  healthConditions:         HealthCondition[];
+  goals:                    SleepGoal[];
+  personalPlan:             PersonalPlan | null;
+  fitnessLevel:             FitnessLevel | null;
+  healthKitPermissionAsked: boolean;
 
   setProfile: (patch: Partial<Omit<UserProfileStore, 'setProfile'>>) => void;
 }
@@ -42,12 +46,14 @@ interface UserProfileStore {
 export const useUserProfileStore = create<UserProfileStore>()(
   persist(
     (set) => ({
-      ageRange:         null,
-      gender:           null,
-      sleepStruggles:   [],
-      healthConditions: [],
-      goals:            [],
-      personalPlan:     null,
+      ageRange:                 null,
+      gender:                   null,
+      sleepStruggles:           [],
+      healthConditions:         [],
+      goals:                    [],
+      personalPlan:             null,
+      fitnessLevel:             null,
+      healthKitPermissionAsked: false,
 
       setProfile: (patch) => set((state) => ({ ...state, ...patch })),
     }),

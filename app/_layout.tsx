@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Animated, AppState, Image, Modal, StyleSheet, Text, View } from 'react-native';
+import { Animated, AppState, Image, Modal, Platform, StyleSheet, Text, View } from 'react-native';
 import * as Linking from 'expo-linking';
 import { useCocoStore } from '../store/cocoStore';
 import { useAuthStore } from '../store/authStore';
@@ -10,6 +10,7 @@ import { useSleepStore } from '../store/sleepStore';
 import { usePurchaseStore } from '../store/purchaseStore';
 import { useActivityStore } from '../store/activityStore';
 import { useRecoveryStore } from '../store/recoveryStore';
+import { useUserProfileStore } from '../store/userProfileStore';
 import { initRevenueCat, syncPremiumStatus, REVENUECAT_CONFIGURED } from '../lib/purchases';
 import { syncWidgetState } from '../utils/widgetSync';
 import { getTierForLevel } from '../constants/tiers';
@@ -17,6 +18,7 @@ import { scoreToCocoLevel, GROWTH_STAGE_IMAGES, streakToGrowthStage } from '../c
 import { Colors } from '../constants/colors';
 import { ScreenTimeManager } from '../modules/ScreenTimeManager';
 import { parseTimeHM } from '../utils/timeHelpers';
+import { HealthKitPermissionModal } from '../components/HealthKitPermissionModal';
 
 function isInSleepWindow(bedtime: string, wakeTime: string): boolean {
   const bed = parseTimeHM(bedtime);
@@ -35,6 +37,10 @@ export default function RootLayout() {
   const router = useRouter();
   const hasSeenOnboarding = useCocoStore((s) => s.hasSeenOnboarding);
   const { loadSession } = useAuthStore();
+
+  // HealthKit permission modal
+  const { healthKitPermissionAsked } = useUserProfileStore();
+  const [showHealthKitModal, setShowHealthKitModal] = useState(false);
 
   // Wait for zustand to hydrate from AsyncStorage before routing
   const [hydrated, setHydrated] = useState(() => useCocoStore.persist.hasHydrated());
@@ -92,6 +98,15 @@ export default function RootLayout() {
   useEffect(() => {
     usePurchaseStore.getState().setPremium(true);
   }, []);
+
+  // Show HealthKit permission modal after onboarding, once per device
+  useEffect(() => {
+    if (loadingDone && hasSeenOnboarding && Platform.OS === 'ios' && !healthKitPermissionAsked) {
+      // Small delay so the UI is fully rendered first
+      const t = setTimeout(() => setShowHealthKitModal(true), 1200);
+      return () => clearTimeout(t);
+    }
+  }, [loadingDone, hasSeenOnboarding, healthKitPermissionAsked]);
 
   // Re-sync widget whenever bedtime, wake time, or tracking state changes
   const bedtimeTime = useCoachStore((s) => s.settings.bedtimeReminderTime);
@@ -250,6 +265,12 @@ export default function RootLayout() {
           <Text style={lvlStyles.sub}>Keep tracking to keep growing.</Text>
         </View>
       </Modal>
+
+      {/* HealthKit permission — shown once after onboarding */}
+      <HealthKitPermissionModal
+        visible={showHealthKitModal}
+        onDismiss={() => setShowHealthKitModal(false)}
+      />
     </>
   );
 }

@@ -20,10 +20,25 @@ import { SleepPhase } from './sleepScore';
 
 export const HEALTHKIT_PERMISSIONS = {
   permissions: {
-    read: ['HeartRateVariability', 'HeartRate', 'SleepAnalysis', 'RespiratoryRate'],
+    read: [
+      'HeartRateVariability',
+      'HeartRate',
+      'SleepAnalysis',
+      'RespiratoryRate',
+      'Workout',
+      'ActiveEnergyBurned',
+      'StepCount',
+    ],
     write: [] as string[],
   },
 };
+
+/** Returns true if HealthKit is available AND was successfully initialised */
+export async function requestAndCheckHealthKit(): Promise<boolean> {
+  const available = await isHealthKitAvailable();
+  if (!available) return false;
+  return requestHealthKitPermissions();
+}
 
 export interface WatchSleepData {
   /** Real RMSSD HRV in ms from Apple Watch — replaces our proxy */

@@ -24,6 +24,10 @@ import { ScreenTimeManager } from '../../modules/ScreenTimeManager';
 import { useCoachStore } from '../../store/coachStore';
 import { useSleepDebtStore } from '../../store/sleepDebtStore';
 import { usePurchaseStore } from '../../store/purchaseStore';
+import { useWorkoutStore } from '../../store/workoutStore';
+import { useUserProfileStore } from '../../store/userProfileStore';
+import { calcSleepTarget, calcStrainBalance, formatTargetHours } from '../../utils/recoveryTarget';
+import { WorkoutLogger } from '../../components/WorkoutLogger';
 import { estimateStageDurations, AudioEvent } from '../../utils/hrvProxy';
 import { SleepStage, generateEstimatedEvents } from '../../utils/sleepScore';
 import { startAudioSampling, stopAudioSampling, audioPermissionStatus, audioTypeLabel, audioTypeIcon, deleteAllClips, listSavedClips, matchClipsToEvents } from '../../utils/audioSampler';
@@ -112,6 +116,19 @@ export default function HomeScreen() {
   const { steps, stepGoal, waterIntake, waterGoal, addWater, removeWater } = useActivityStore();
   const { debtHours } = useSleepDebtStore();
   const { isPremium } = usePurchaseStore();
+  const { getForDate, getRecent } = useWorkoutStore();
+  const { ageRange } = useUserProfileStore();
+
+  // ── Recovery Engine calculations ─────────────────────────────────────────────
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayWorkout = getForDate(todayStr);
+  const sleepTarget = calcSleepTarget(ageRange, todayWorkout);
+  const recentWorkouts = getRecent(7);
+  const recentSessions = history.slice(0, 7);
+  const strainBalance = calcStrainBalance(recentSessions, recentWorkouts);
+  const adjustedScore = latestSession
+    ? Math.min(Math.round((latestSession.durationHours / sleepTarget) * 100), 110)
+    : null;
 
   const currentTier = getTierForLevel(tier);
   const recoveryScore = latestSession?.recovery.recoveryScore ?? null;
@@ -584,20 +601,85 @@ export default function HomeScreen() {
           );
         })()}
 
-        {/* Recovery score */}
-        {recoveryScore !== null ? (
-          <View style={[styles.scoreCard, { borderLeftColor: recScoreColor }]}>
-            <View style={styles.scoreCardInner}>
-              <Text style={styles.scoreLabel}>SLEEP SCORE</Text>
-              <Text style={[styles.scoreValue, { color: recScoreColor }]}>{recoveryScore}</Text>
-              <View style={[styles.scoreAccent, { backgroundColor: recScoreColor }]} />
-              <Text style={styles.scoreSub}>{latestSession?.recovery.performanceForecast}</Text>
-              <TouchableOpacity onPress={() => router.push('/(tabs)/report')}>
-                <Text style={styles.reportLink}>VIEW STATISTICS →</Text>
-              </TouchableOpacity>
+        {/* ── RECOVERY ENGINE ──────────────────────────────────────────────── */}
+        <Text style={styles.sectionEyebrow}>// RECOVERY ENGINE</Text>
+        <View style={styles.recoveryEngineCard}>
+          <DiagonalStripes color={Colors.red} opacity={0.03} />
+
+          {/* Top row: last night score + tonight target */}
+          <View style={styles.reTopRow}>
+            <View style={styles.reScoreBlock}>
+              <Text style={styles.reBlockLabel}>LAST NIGHT</Text>
+              {adjustedScore !== null ? (
+                <>
+                  <Text style={[styles.reScoreNum, { color: scoreColor(Math.min(adjustedScore, 100)) }]}>
+                    {Math.min(adjustedScore, 100)}%
+                  </Text>
+                  <Text style={[styles.reScoreTag, {
+                    color: adjustedScore >= 90 ? Colors.green : adjustedScore >= 70 ? Colors.gold : Colors.red
+                  }]}>
+                    {adjustedScore >= 90 ? 'FULLY RECOVERED' : adjustedScore >= 70 ? 'GOOD RECOVERY' : 'UNDER RECOVERED'}
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <Text style={[styles.reScoreNum, { color: Colors.textMuted }]}>—</Text>
+                  <Text style={styles.reScoreTag}>NO DATA YET</Text>
+                </>
+              )}
+            </View>
+
+            <View style={styles.reDivider} />
+
+            <View style={styles.reTargetBlock}>
+              <Text style={styles.reBlockLabel}>TONIGHT'S TARGET</Text>
+              <Text style={styles.reTargetNum}>{formatTargetHours(sleepTarget)}</Text>
+              <Text style={styles.reTargetSub}>
+                {todayWorkout && todayWorkout.type !== 'rest'
+                  ? `+${formatTargetHours(todayWorkout.load / 300)} workout`
+                  : 'base target'}
+              </Text>
             </View>
           </View>
-        ) : (
+
+          {/* Strain / Recovery balance bar */}
+          <View style={styles.reBalanceRow}>
+            <View style={styles.reBalanceTrack}>
+              <View style={[
+                styles.reBalanceFill,
+                {
+                  width: `${Math.round(strainBalance.balance * 100)}%` as any,
+                  backgroundColor:
+                    strainBalance.color === 'green' ? Colors.green :
+                    strainBalance.color === 'gold' ? Colors.gold : Colors.red,
+                }
+              ]} />
+            </View>
+            <Text style={[
+              styles.reBalanceLabel,
+              {
+                color: strainBalance.color === 'green' ? Colors.green :
+                  strainBalance.color === 'gold' ? Colors.gold : Colors.red,
+              }
+            ]}>
+              {strainBalance.label}
+            </Text>
+            <Text style={styles.reBalanceSub}>7-DAY STRAIN / RECOVERY</Text>
+          </View>
+
+          {recoveryScore !== null && (
+            <Text style={styles.reForecast}>{latestSession?.recovery.performanceForecast}</Text>
+          )}
+
+          <TouchableOpacity onPress={() => router.push('/(tabs)/report')} style={styles.reStatLink}>
+            <Text style={styles.reportLink}>VIEW STATISTICS →</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Workout Logger */}
+        <WorkoutLogger />
+
+        {recoveryScore === null && (
           <View style={styles.noDataCard}>
             <DiagonalStripes opacity={0.04} />
             <View style={styles.noDataInner}>
@@ -993,6 +1075,50 @@ const styles = StyleSheet.create({
   scoreAccent: { height: 3, width: 40, marginTop: 4, marginBottom: 8 },
   scoreSub: { fontSize: 13, color: Colors.textSecondary, lineHeight: 20, marginBottom: 12 },
   reportLink: { fontSize: 10, fontWeight: '900', fontStyle: 'italic', letterSpacing: 2, color: Colors.red },
+
+  // Recovery Engine card
+  recoveryEngineCard: {
+    backgroundColor: '#111', borderLeftWidth: 4, borderLeftColor: Colors.red,
+    overflow: 'hidden', marginBottom: 12,
+  },
+  reTopRow: {
+    flexDirection: 'row', alignItems: 'stretch', padding: 16, paddingBottom: 12, gap: 0,
+  },
+  reScoreBlock: { flex: 1, paddingRight: 16 },
+  reDivider: { width: 1, backgroundColor: Colors.border, marginVertical: 4, marginHorizontal: 8 },
+  reTargetBlock: { flex: 1, paddingLeft: 8 },
+  reBlockLabel: {
+    fontSize: 8, fontWeight: '900', fontStyle: 'italic',
+    letterSpacing: 2, color: Colors.textMuted, marginBottom: 4,
+  },
+  reScoreNum: {
+    fontSize: 42, fontWeight: '900', fontStyle: 'italic', lineHeight: 46,
+  },
+  reScoreTag: {
+    fontSize: 8, fontWeight: '900', fontStyle: 'italic', letterSpacing: 1, marginTop: 2,
+  },
+  reTargetNum: {
+    fontSize: 32, fontWeight: '900', fontStyle: 'italic', color: Colors.textPrimary, lineHeight: 36,
+  },
+  reTargetSub: {
+    fontSize: 9, color: Colors.textMuted, marginTop: 3,
+  },
+  reBalanceRow: { paddingHorizontal: 16, paddingBottom: 14 },
+  reBalanceTrack: {
+    height: 4, backgroundColor: Colors.border, overflow: 'hidden', marginBottom: 6,
+  },
+  reBalanceFill: { height: 4 },
+  reBalanceLabel: {
+    fontSize: 10, fontWeight: '800', fontStyle: 'italic', marginBottom: 2,
+  },
+  reBalanceSub: {
+    fontSize: 8, fontWeight: '700', letterSpacing: 2, color: Colors.textMuted,
+  },
+  reForecast: {
+    fontSize: 12, color: Colors.textSecondary, lineHeight: 18,
+    paddingHorizontal: 16, paddingBottom: 10,
+  },
+  reStatLink: { paddingHorizontal: 16, paddingBottom: 14 },
 
   noDataCard: {
     backgroundColor: Colors.bgCard, borderWidth: 1, borderColor: Colors.border,

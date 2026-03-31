@@ -9,6 +9,10 @@ export interface RecoveryEngineInput {
   sleepEfficiency:     number;  // 0–100 %
   sleepLatencyMinutes: number;
   wasoMinutes:         number;
+  /** Optional: exercise load from today's workout (TRIMP units) */
+  exerciseLoad?:       number;
+  /** Optional: personalised sleep target in hours */
+  sleepTarget?:        number;
 }
 
 export interface RecoveryInsight {
@@ -33,6 +37,7 @@ export function generateRecoveryReport(input: RecoveryEngineInput): RecoveryEngi
   const {
     sleepScore, recoveryScore, durationHours, movementEvents,
     sleepEfficiency, sleepLatencyMinutes, wasoMinutes,
+    exerciseLoad, sleepTarget,
   } = input;
 
   const hrvProxy         = calculateHRVProxy(movementEvents);
@@ -41,13 +46,22 @@ export function generateRecoveryReport(input: RecoveryEngineInput): RecoveryEngi
   // Cortisol elevated with short sleep OR high WASO
   const cortisolFlag = durationHours < 6 || wasoMinutes > 30;
 
+  // If we have a sleep target, score against it; otherwise use raw recovery score
+  const targetedScore = sleepTarget
+    ? Math.min(Math.round((durationHours / sleepTarget) * 100), 110)
+    : recoveryScore;
+
+  const exerciseNote = exerciseLoad && exerciseLoad > 0
+    ? ` (workout load: ${exerciseLoad})`
+    : '';
+
   const performanceForecast =
-    recoveryScore >= 85 ? `Full recovery. Expect peak output today.`
-    : recoveryScore >= 70 ? `Good recovery. Train hard.`
-    : recoveryScore >= 55
-      ? `Slept ${durationHours.toFixed(1)}hrs. Expect ${Math.round((1 - recoveryScore / 100) * 15 + 5)}% lower output.`
-    : recoveryScore >= 40 ? `Poor recovery. Train smart, not hard.`
-    : `Critical sleep deficit. Rest day recommended.`;
+    targetedScore >= 90 ? `Full recovery. Peak output today.${exerciseNote}`
+    : targetedScore >= 75 ? `Good recovery. Push hard today.${exerciseNote}`
+    : targetedScore >= 60
+      ? `Slept ${durationHours.toFixed(1)}h vs ${sleepTarget ? sleepTarget.toFixed(1) + 'h target' : 'target'}. Moderate output.`
+    : targetedScore >= 40 ? `Under-recovered. Train smart, not hard.`
+    : `Critical deficit. Rest day recommended.`;
 
   const muscleRecoveryStatus =
     deepSleepMinutes < 90
