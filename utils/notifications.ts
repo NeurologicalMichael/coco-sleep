@@ -16,7 +16,8 @@ import { fetchFriendsLeaderboard } from '../lib/leaderboard';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
     shouldPlaySound: true,
     shouldSetBadge: false,
   }),
@@ -85,7 +86,6 @@ async function scheduleBedtimeReminder(time: string): Promise<void> {
     trigger: {
       hour,
       minute,
-      repeats: true,
       type: Notifications.SchedulableTriggerInputTypes.DAILY,
     },
   });

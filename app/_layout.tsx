@@ -186,10 +186,11 @@ export default function RootLayout() {
 
   // Handle widget deep links:
   //   coco-sleep://toggle-sleep  → set pendingWidgetToggle + navigate to Sleep tab
+  //   coco-sleep://begin-sleep   → set pendingWidgetToggle + navigate to Sleep tab (Begin Sleep button)
   //   coco-sleep://sleep         → navigate to Sleep tab
   useEffect(() => {
     function handleUrl({ url }: { url: string }) {
-      if (url.includes('toggle-sleep')) {
+      if (url.includes('toggle-sleep') || url.includes('begin-sleep')) {
         useSleepStore.getState().setPendingWidgetToggle(true);
         router.push('/(tabs)/sleep');
       } else if (url.includes('sleep')) {
@@ -200,7 +201,7 @@ export default function RootLayout() {
     // Handle cold-start URL
     Linking.getInitialURL().then((url) => {
       if (!url) return;
-      if (url.includes('toggle-sleep')) {
+      if (url.includes('toggle-sleep') || url.includes('begin-sleep')) {
         useSleepStore.getState().setPendingWidgetToggle(true);
         router.push('/(tabs)/sleep');
       } else if (url.includes('sleep')) {
