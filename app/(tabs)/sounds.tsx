@@ -117,9 +117,11 @@ export default function CocoAIScreen() {
       Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
       (e) => {
         const pad = Math.max(0, e.endCoordinates.height - tabBarH);
-        Animated.timing(animatedPad, {
+        // Spring with no bounce — tracks the keyboard's own velocity curve
+        Animated.spring(animatedPad, {
           toValue:         pad,
-          duration:        e.duration > 0 ? e.duration : 250,
+          speed:           40,
+          bounciness:      0,
           useNativeDriver: false,
         }).start();
       },
@@ -127,10 +129,11 @@ export default function CocoAIScreen() {
 
     const hide = Keyboard.addListener(
       Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
-      (e) => {
-        Animated.timing(animatedPad, {
+      () => {
+        Animated.spring(animatedPad, {
           toValue:         0,
-          duration:        e.duration > 0 ? e.duration : 250,
+          speed:           40,
+          bounciness:      0,
           useNativeDriver: false,
         }).start();
       },
