@@ -127,9 +127,11 @@ export default function RootLayout() {
     });
   }, [bedtimeTime, wakeTime, isTracking]);
 
-  // One-time cleanup: purge any sessions under 10 minutes from history
+  // Cleanup: purge sessions under 10 minutes — only if any such sessions exist
   useEffect(() => {
-    useRecoveryStore.getState().purgeShortSessions();
+    const { history } = useRecoveryStore.getState();
+    const hasShort = history.some((s) => s.durationHours < 10 / 60);
+    if (hasShort) useRecoveryStore.getState().purgeShortSessions();
   }, []);
 
   // Initialise RevenueCat and sync subscription status on startup

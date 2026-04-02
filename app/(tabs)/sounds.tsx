@@ -6,11 +6,12 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
-  StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator,
-  Keyboard,
+  StyleSheet, Animated, ActivityIndicator,
+  Keyboard, Platform,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/colors';
 import { DiagonalStripes } from '../../components/DiagonalStripes';
 import { usePurchaseStore } from '../../store/purchaseStore';
@@ -97,13 +98,46 @@ const bs = StyleSheet.create({
 export default function CocoAIScreen() {
   const { isPremium } = usePurchaseStore();
   const router        = useRouter();
+  const insets        = useSafeAreaInsets();
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input,    setInput]    = useState('');
   const [loading,  setLoading]  = useState(false);
   const [chips,    setChips]    = useState<string[]>(() => pickThree());
   const [error,    setError]    = useState<string | null>(null);
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef    = useRef<ScrollView>(null);
+  const animatedPad  = useRef(new Animated.Value(0)).current;
+
+  // Smooth keyboard animation — matches the keyboard's own spring/duration
+  useEffect(() => {
+    // Tab bar height (49 base + safe area bottom inset)
+    const tabBarH = Platform.OS === 'ios' ? 49 + insets.bottom : 0;
+
+    const show = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e) => {
+        const pad = Math.max(0, e.endCoordinates.height - tabBarH);
+        Animated.timing(animatedPad, {
+          toValue:         pad,
+          duration:        e.duration > 0 ? e.duration : 250,
+          useNativeDriver: false,
+        }).start();
+      },
+    );
+
+    const hide = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      (e) => {
+        Animated.timing(animatedPad, {
+          toValue:         0,
+          duration:        e.duration > 0 ? e.duration : 250,
+          useNativeDriver: false,
+        }).start();
+      },
+    );
+
+    return () => { show.remove(); hide.remove(); };
+  }, [insets.bottom]);
 
   const scrollToBottom = useCallback(() => {
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80);
@@ -172,11 +206,7 @@ export default function CocoAIScreen() {
   );
 
   return (
-    <KeyboardAvoidingView
-      style={s.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={0}
-    >
+    <Animated.View style={[s.container, { paddingBottom: animatedPad }]}>
       <ScrollView
         ref={scrollRef}
         style={s.scroll}
@@ -239,7 +269,7 @@ export default function CocoAIScreen() {
           <Text style={s.sendIcon}>↑</Text>
         </TouchableOpacity>
       </View>
-    </KeyboardAvoidingView>
+    </Animated.View>
   );
 }
 
