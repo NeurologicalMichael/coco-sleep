@@ -253,13 +253,6 @@ export default function ProfileScreen() {
     </Modal>
 
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.eyebrow}>// YOUR PROGRESS</Text>
-        <Text style={styles.title}>PROFILE</Text>
-        <View style={styles.titleUnderline} />
-      </View>
-
       {/* Tier card */}
       <View style={[styles.tierOuter, { borderColor: currentTier.color, borderLeftColor: currentTier.color }]}>
         <DiagonalStripes color={currentTier.color} opacity={0.06} />

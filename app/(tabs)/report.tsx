@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ScrollView, View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAudioPlayer } from 'expo-audio';
@@ -12,6 +12,7 @@ import { scoreToCocoLevel, COCO_LEVELS } from '../../constants/cocoLevels';
 import { usePurchaseStore } from '../../store/purchaseStore';
 import { StageTimeline, MovementGraph } from '../../components/SleepCharts';
 import { audioTypeLabel, audioTypeIcon } from '../../utils/audioSampler';
+import { useSoundClipsStore, SoundClip } from '../../store/soundClipsStore';
 
 const severityColor: Record<RecoveryInsight['severity'], string> = {
   good: Colors.green, neutral: Colors.info, warning: Colors.warning, critical: Colors.danger,
@@ -603,6 +604,173 @@ const clipSt = StyleSheet.create({
   playText: { fontSize: 11, fontWeight: '900' },
 });
 
+// ─── Sound Clip Row (playable, saveable) ──────────────────────────────────────
+
+function SoundClipRow({ clip, onToggleSave, onDelete }: {
+  clip: SoundClip;
+  onToggleSave: () => void;
+  onDelete: () => void;
+}) {
+  const player = useAudioPlayer({ uri: clip.filePath });
+  const [playing, setPlaying] = useState(false);
+
+  const typeColor =
+    clip.type === 'snoring'    ? Colors.gold  :
+    clip.type === 'talking'    ? Colors.info  : Colors.red;
+
+  function toggle() {
+    if (playing) { player.pause(); setPlaying(false); }
+    else         { player.seekTo(0); player.play(); setPlaying(true); }
+  }
+
+  return (
+    <View style={scRowSt.row}>
+      <Text style={scRowSt.icon}>{audioTypeIcon(clip.type)}</Text>
+      <View style={{ flex: 1 }}>
+        <Text style={[scRowSt.type, { color: typeColor }]}>
+          {clip.label ?? audioTypeLabel(clip.type)}
+        </Text>
+        <Text style={scRowSt.meta}>
+          {formatClockTime(clip.timestamp)} · {Math.round(clip.durationSeconds)}s
+        </Text>
+      </View>
+      <View style={scRowSt.actions}>
+        <TouchableOpacity onPress={toggle}
+          style={[scRowSt.playBtn, playing && { borderColor: typeColor }]}>
+          <Text style={[scRowSt.playText, { color: typeColor }]}>{playing ? '■' : '▶'}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={onToggleSave} style={scRowSt.starBtn}>
+          <Text style={{ fontSize: 14, color: clip.saved ? Colors.gold : Colors.textMuted }}>
+            {clip.saved ? '★' : '☆'}
+          </Text>
+        </TouchableOpacity>
+        {!clip.saved && (
+          <TouchableOpacity onPress={onDelete} style={scRowSt.deleteBtn}>
+            <Text style={{ fontSize: 12, color: Colors.textMuted }}>✕</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
+  );
+}
+
+const scRowSt = StyleSheet.create({
+  row: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: Colors.bgCard, borderWidth: 1, borderColor: Colors.border,
+    borderLeftWidth: 3, borderLeftColor: '#A855F7', padding: 12, marginBottom: 6,
+  },
+  icon: { fontSize: 18 },
+  type: { fontSize: 10, fontWeight: '900', fontStyle: 'italic', letterSpacing: 1 },
+  meta: { fontSize: 10, color: Colors.textMuted, marginTop: 2 },
+  actions: { flexDirection: 'row', gap: 6, alignItems: 'center' },
+  playBtn: { borderWidth: 1.5, borderColor: Colors.border, paddingHorizontal: 10, paddingVertical: 5 },
+  playText: { fontSize: 11, fontWeight: '900' },
+  starBtn: { padding: 4 },
+  deleteBtn: { padding: 4 },
+});
+
+// ─── Night Sounds Section ─────────────────────────────────────────────────────
+
+function NightSoundsSection() {
+  const { clips, deleteOldUnsaved, saveClip, unsaveClip, deleteClip } = useSoundClipsStore();
+
+  useEffect(() => { void deleteOldUnsaved(); }, []);
+
+  // Unique session dates, newest first
+  const dates = [...new Set(clips.map((c) => c.sessionDate))]
+    .sort().reverse().slice(0, 7);
+
+  const defaultDate = dates[0] ?? new Date().toISOString().slice(0, 10);
+  const [selectedDate, setSelectedDate] = useState(defaultDate);
+
+  const dayClips = clips
+    .filter((c) => c.sessionDate === selectedDate)
+    .sort((a, b) => a.timestamp - b.timestamp);
+
+  if (clips.length === 0) {
+    return (
+      <View style={nsSt.emptyCard}>
+        <Text style={nsSt.emptyIcon}>🎙</Text>
+        <Text style={nsSt.emptyTitle}>No overnight recordings yet.</Text>
+        <Text style={nsSt.emptySub}>
+          Sleep with mic access enabled — Coco listens for snoring, talking, and sound events and saves short clips for review.
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={{ marginBottom: 28 }}>
+      {/* Date selector chips */}
+      {dates.length > 1 && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ gap: 8, paddingBottom: 12 }}>
+          {dates.map((d) => {
+            const active  = d === selectedDate;
+            const count   = clips.filter((c) => c.sessionDate === d).length;
+            const dt      = new Date(d);
+            return (
+              <TouchableOpacity key={d}
+                style={[nsSt.chip, active && nsSt.chipActive]}
+                onPress={() => setSelectedDate(d)} activeOpacity={0.75}>
+                <Text style={[nsSt.chipDate, active && { color: Colors.textPrimary }]}>
+                  {DAY_NAMES[dt.getDay()]} {dt.getDate()}
+                </Text>
+                <Text style={[nsSt.chipCount, active && { color: '#A855F7' }]}>{count}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      )}
+
+      {dayClips.length === 0 ? (
+        <View style={nsSt.noClipsCard}>
+          <Text style={nsSt.noClipsText}>No sound events recorded this night.</Text>
+        </View>
+      ) : (
+        <>
+          <Text style={nsSt.countRow}>
+            {dayClips.length} clip{dayClips.length !== 1 ? 's' : ''} recorded
+            {dayClips.some((c) => c.saved) ? ` · ${dayClips.filter((c) => c.saved).length} saved` : ''}
+          </Text>
+          {dayClips.map((clip) => (
+            <SoundClipRow
+              key={clip.id}
+              clip={clip}
+              onToggleSave={() => clip.saved ? unsaveClip(clip.id) : saveClip(clip.id)}
+              onDelete={() => void deleteClip(clip.id)}
+            />
+          ))}
+        </>
+      )}
+    </View>
+  );
+}
+
+const nsSt = StyleSheet.create({
+  emptyCard: {
+    backgroundColor: Colors.bgCard, borderWidth: 1, borderColor: Colors.border,
+    borderLeftWidth: 4, borderLeftColor: '#A855F7',
+    padding: 20, alignItems: 'center', marginBottom: 24,
+  },
+  emptyIcon:  { fontSize: 28, marginBottom: 8 },
+  emptyTitle: { fontSize: 13, fontWeight: '900', fontStyle: 'italic', color: Colors.textPrimary, marginBottom: 6 },
+  emptySub:   { fontSize: 11, color: Colors.textMuted, textAlign: 'center', lineHeight: 17 },
+  chip: {
+    alignItems: 'center', paddingHorizontal: 14, paddingVertical: 8,
+    backgroundColor: Colors.bgCard, borderWidth: 1, borderColor: Colors.border, minWidth: 60,
+  },
+  chipActive: { borderColor: '#A855F7', backgroundColor: 'rgba(168,85,247,0.08)' },
+  chipDate:   { fontSize: 8, fontWeight: '900', fontStyle: 'italic', letterSpacing: 1, color: Colors.textMuted },
+  chipCount:  { fontSize: 13, fontWeight: '900', marginTop: 2, color: Colors.textMuted },
+  noClipsCard: {
+    backgroundColor: Colors.bgCard, borderWidth: 1, borderColor: Colors.border, padding: 14,
+  },
+  noClipsText: { fontSize: 11, color: Colors.textMuted, fontStyle: 'italic' },
+  countRow: { fontSize: 10, fontWeight: '700', color: Colors.textMuted, letterSpacing: 1, marginBottom: 10 },
+});
+
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
 export default function ReportScreen() {
@@ -611,22 +779,24 @@ export default function ReportScreen() {
 
   if (history.length === 0) {
     return (
-      <View style={styles.emptyFull}>
-        <Text style={styles.emptyTitle}>NO DATA YET.</Text>
-        <View style={styles.emptyBar} />
-        <Text style={styles.emptySub}>Complete a sleep session to see your statistics.</Text>
-      </View>
+      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+        <Text style={styles.sectionLabel}>// NIGHT SOUNDS</Text>
+        <NightSoundsSection />
+        <View style={styles.emptyFull}>
+          <Text style={styles.emptyTitle}>NO SLEEP DATA.</Text>
+          <View style={styles.emptyBar} />
+          <Text style={styles.emptySub}>Complete a sleep session to see your stats.</Text>
+        </View>
+      </ScrollView>
     );
   }
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <View style={styles.header}>
-        <Text style={styles.eyebrow}>// COCO</Text>
-        <Text style={styles.title}>STATISTICS</Text>
-        <View style={styles.titleUnderline} />
-      </View>
+      <Text style={styles.sectionLabel}>// NIGHT SOUNDS</Text>
+      <NightSoundsSection />
 
+      <Text style={styles.sectionLabel}>// SLEEP STATS</Text>
       <AveragesSection history={history} />
 
       <NightHistoryBrowser history={history} isPremium={isPremium} />
@@ -643,8 +813,9 @@ const styles = StyleSheet.create({
   eyebrow: { fontSize: 9, fontWeight: '900', fontStyle: 'italic', letterSpacing: 3, color: Colors.red, marginBottom: 4 },
   title: { fontSize: 52, fontWeight: '900', fontStyle: 'italic', color: Colors.textPrimary, lineHeight: 54 },
   titleUnderline: { height: 3, width: 60, backgroundColor: Colors.red, marginTop: 6, marginBottom: 4 },
-  emptyFull: { flex: 1, backgroundColor: Colors.bgDeep, alignItems: 'center', justifyContent: 'center', padding: 40 },
+  emptyFull: { backgroundColor: Colors.bgDeep, alignItems: 'center', justifyContent: 'center', padding: 40, paddingTop: 20 },
   emptyTitle: { fontSize: 28, fontWeight: '900', fontStyle: 'italic', color: Colors.textPrimary, marginBottom: 8 },
   emptyBar: { height: 3, width: 40, backgroundColor: Colors.red, marginBottom: 16 },
   emptySub: { fontSize: 14, color: Colors.textSecondary, textAlign: 'center', lineHeight: 22 },
+  sectionLabel: { fontSize: 9, fontWeight: '900', fontStyle: 'italic', letterSpacing: 3, color: Colors.red, marginBottom: 14 },
 });

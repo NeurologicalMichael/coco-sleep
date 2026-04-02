@@ -1,336 +1,293 @@
-import { useState } from 'react';
+/**
+ * Coco AI — Sleep Coach Chat
+ * Premium feature. Powered by Claude (Anthropic).
+ */
+
+import { useState, useRef, useCallback, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity,
-  ScrollView, Dimensions,
+  View, Text, TextInput, TouchableOpacity, ScrollView,
+  StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator,
+  Keyboard,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
+import { useRouter } from 'expo-router';
 import { Colors } from '../../constants/colors';
-import { SOUNDS, useSleepAudio, SoundId } from '../../components/SleepSoundsPlayer';
+import { DiagonalStripes } from '../../components/DiagonalStripes';
+import { usePurchaseStore } from '../../store/purchaseStore';
+import { sendCocoMessage, ChatMessage, AI_CONFIGURED } from '../../lib/cocoAI';
 
-const { width } = Dimensions.get('window');
-const CARD_W = (width - 48 - 12) / 2; // 2-col grid, 24px pad each side, 12px gap
+// ─── Question bank ────────────────────────────────────────────────────────────
 
-type Category = 'all' | 'noise' | 'nature' | 'ambient';
-
-const CATS: { id: Category; label: string }[] = [
-  { id: 'all',     label: 'All'     },
-  { id: 'nature',  label: 'Nature'  },
-  { id: 'noise',   label: 'Noise'   },
-  { id: 'ambient', label: 'Ambient' },
+const QUESTION_BANK = [
+  "What's the best bedtime for my wake-up goal?",
+  "How many hours of sleep do I actually need based on my trends?",
+  "Why do I feel tired even after a full night's sleep?",
+  "Which night this month was my best sleep and what made it good?",
+  "How long is it taking me to fall asleep on average?",
+  "Is my sleep getting better or worse over the past 30 days?",
+  "What does my stage breakdown look like compared to last week?",
+  "How much deep sleep am I averaging per night?",
+  "Why was my sleep efficiency so low last night?",
+  "What's causing so many disruptions in my sleep?",
 ];
 
-const VOL_STEPS = [0.2, 0.4, 0.6, 0.8, 1.0];
+function pickThree(): string[] {
+  const shuffled = [...QUESTION_BANK].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, 3);
+}
 
-export default function MusicScreen() {
-  const { activeId, volume, play, stop, setVolume } = useSleepAudio();
-  const [cat, setCat] = useState<Category>('all');
+// ─── Message bubble ───────────────────────────────────────────────────────────
 
-  const activeSound = SOUNDS.find((s) => s.id === activeId);
-  const filtered = cat === 'all'
-    ? SOUNDS
-    : SOUNDS.filter((s) => s.sub.toLowerCase() === cat);
-
-  // Pair up into rows for 2-col grid
-  const rows: (typeof SOUNDS[number] | null)[][] = [];
-  for (let i = 0; i < filtered.length; i += 2) {
-    rows.push([filtered[i], filtered[i + 1] ?? null]);
-  }
-
+function Bubble({ msg }: { msg: ChatMessage }) {
+  const isUser = msg.role === 'user';
   return (
-    <View style={styles.root}>
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* ── Header ── */}
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.eyebrow}>// WIND DOWN</Text>
-            <Text style={styles.title}>MUSIC</Text>
-            <View style={styles.bar} />
-          </View>
-          {activeSound && (
-            <TouchableOpacity style={styles.stopBtn} onPress={stop} activeOpacity={0.7}>
-              <Ionicons name="stop-circle" size={28} color={Colors.red} />
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* ── Hero banner ── */}
-        <View style={styles.hero}>
-          <View style={styles.heroBg} />
-          <View style={styles.heroContent}>
-            <Text style={styles.heroTag}>SLEEP SOUNDS</Text>
-            <Text style={styles.heroTitle}>Sleep better with{'\n'}ambient audio</Text>
-            <Text style={styles.heroSub}>Plays in background · screen off · locked phone</Text>
-          </View>
-          <View style={styles.heroIconWrap}>
-            <Text style={styles.heroIcon}>🎵</Text>
-          </View>
-        </View>
-
-        {/* ── Category pills ── */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.catRow}
-        >
-          {CATS.map((c) => (
-            <TouchableOpacity
-              key={c.id}
-              style={[styles.catPill, cat === c.id && styles.catPillActive]}
-              onPress={() => setCat(c.id)}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.catLabel, cat === c.id && styles.catLabelActive]}>
-                {c.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-
-        {/* ── Sound grid ── */}
-        <View style={styles.grid}>
-          {rows.map((row, ri) => (
-            <View key={ri} style={styles.gridRow}>
-              {row.map((sound, ci) =>
-                sound ? (
-                  <SoundCard
-                    key={sound.id}
-                    sound={sound}
-                    active={activeId === sound.id}
-                    onPress={() => play(sound.id as SoundId)}
-                  />
-                ) : (
-                  <View key={`empty-${ci}`} style={{ width: CARD_W }} />
-                )
-              )}
-            </View>
-          ))}
-        </View>
-
-        {/* ── Spacer for mini player ── */}
-        {activeSound && <View style={{ height: 90 }} />}
-      </ScrollView>
-
-      {/* ── Mini player (pinned bottom) ── */}
-      {activeSound && (
-        <View style={styles.miniPlayer}>
-          <View style={[styles.miniAccent, { backgroundColor: activeSound.accent }]} />
-          <View style={styles.miniLeft}>
-            <Text style={styles.miniEmoji}>{activeSound.emoji}</Text>
-            <View>
-              <Text style={styles.miniName}>{activeSound.label}</Text>
-              <Text style={styles.miniSub}>NOW PLAYING · SCREEN OFF SUPPORTED</Text>
-            </View>
-          </View>
-          <View style={styles.miniRight}>
-            {/* Volume bar */}
-            <View style={styles.miniVolRow}>
-              {VOL_STEPS.map((v) => (
-                <TouchableOpacity
-                  key={v}
-                  style={[styles.miniVolStep, volume >= v - 0.01 && { backgroundColor: activeSound.accent }]}
-                  onPress={() => setVolume(v)}
-                />
-              ))}
-            </View>
-            <TouchableOpacity onPress={stop} activeOpacity={0.7}>
-              <Ionicons name="stop-circle" size={32} color={activeSound.accent} />
-            </TouchableOpacity>
-          </View>
+    <View style={[bs.row, isUser && bs.rowUser]}>
+      {!isUser && (
+        <View style={bs.avatar}>
+          <Text style={bs.avatarText}>C</Text>
         </View>
       )}
+      <View style={[bs.bubble, isUser ? bs.bubbleUser : bs.bubbleCoco]}>
+        <Text style={[bs.text, isUser && bs.textUser]}>{msg.content}</Text>
+      </View>
     </View>
   );
 }
 
-// ─── Sound Card ───────────────────────────────────────────────────────────────
+const bs = StyleSheet.create({
+  row:        { flexDirection: 'row', marginBottom: 14, alignItems: 'flex-end', gap: 8, paddingHorizontal: 16 },
+  rowUser:    { flexDirection: 'row-reverse' },
+  avatar:     { width: 28, height: 28, backgroundColor: Colors.red, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  avatarText: { fontSize: 11, fontWeight: '900', fontStyle: 'italic', color: '#fff' },
+  bubble:     { maxWidth: '80%', padding: 12, borderWidth: 1 },
+  bubbleCoco: { backgroundColor: '#111', borderColor: Colors.border, borderLeftWidth: 3, borderLeftColor: Colors.red },
+  bubbleUser: { backgroundColor: Colors.red + '22', borderColor: Colors.red + '55' },
+  text:       { fontSize: 13, color: Colors.textSecondary, lineHeight: 20 },
+  textUser:   { color: Colors.textPrimary },
+});
 
-function SoundCard({
-  sound,
-  active,
-  onPress,
-}: {
-  sound: typeof SOUNDS[number];
-  active: boolean;
-  onPress: () => void;
-}) {
+// ─── Main screen ──────────────────────────────────────────────────────────────
+
+export default function CocoAIScreen() {
+  const { isPremium } = usePurchaseStore();
+  const router        = useRouter();
+
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [input,    setInput]    = useState('');
+  const [loading,  setLoading]  = useState(false);
+  const [chips,    setChips]    = useState<string[]>(() => pickThree());
+  const [error,    setError]    = useState<string | null>(null);
+  const scrollRef = useRef<ScrollView>(null);
+
+  const scrollToBottom = useCallback(() => {
+    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80);
+  }, []);
+
+  useEffect(() => { if (messages.length) scrollToBottom(); }, [messages.length]);
+
+  async function send(text: string) {
+    const trimmed = text.trim();
+    if (!trimmed || loading) return;
+    Keyboard.dismiss();
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    const userMsg: ChatMessage = { role: 'user', content: trimmed };
+    const next = [...messages, userMsg];
+    setMessages(next);
+    setInput('');
+    setError(null);
+    setLoading(true);
+    setChips(pickThree());
+
+    try {
+      const reply = await sendCocoMessage(next);
+      setMessages([...next, { role: 'assistant', content: reply }]);
+    } catch {
+      setError('Something went wrong. Check your connection and try again.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // ── Paywall gate ────────────────────────────────────────────────────────────
+
+  if (!isPremium) {
+    return (
+      <View style={gate.container}>
+        <DiagonalStripes color={Colors.red} opacity={0.04} />
+        <View style={gate.logoMark}>
+          <Text style={gate.logoC}>C</Text>
+        </View>
+        <Text style={gate.title}>COCO AI</Text>
+        <View style={gate.bar} />
+        <Text style={gate.sub}>
+          Your personal sleep coach.{'\n'}Powered by AI, trained on your data.
+        </Text>
+        <TouchableOpacity style={gate.btn} onPress={() => router.push('/paywall')} activeOpacity={0.8}>
+          <Text style={gate.btnText}>UNLOCK WITH PRO →</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  const isEmpty = messages.length === 0;
+
   return (
-    <TouchableOpacity
-      style={[styles.card, { backgroundColor: sound.bg, width: CARD_W }]}
-      onPress={onPress}
-      activeOpacity={0.8}
+    <KeyboardAvoidingView
+      style={s.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={90}
     >
-      {/* Active border glow */}
-      {active && (
-        <View style={[StyleSheet.absoluteFill, styles.cardGlow, { borderColor: sound.accent }]} />
-      )}
+      <ScrollView
+        ref={scrollRef}
+        style={s.scroll}
+        contentContainerStyle={[s.scrollContent, isEmpty && s.scrollEmpty]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {isEmpty ? (
+          <View style={s.emptyState}>
+            <View style={s.logoMark}>
+              <Text style={s.logoC}>C</Text>
+            </View>
+            <Text style={s.emptyTitle}>COCO AI</Text>
+            <Text style={s.emptySub}>Your personal sleep coach.{'\n'}Ask me anything about your sleep.</Text>
+          </View>
+        ) : (
+          messages.map((m, i) => <Bubble key={i} msg={m} />)
+        )}
 
-      {/* Category tag */}
-      <View style={[styles.cardTag, { backgroundColor: sound.accent + '30' }]}>
-        <Text style={[styles.cardTagText, { color: sound.accent }]}>{sound.sub.toUpperCase()}</Text>
+        {loading && (
+          <View style={[bs.row, { paddingHorizontal: 16 }]}>
+            <View style={bs.avatar}>
+              <Text style={bs.avatarText}>C</Text>
+            </View>
+            <View style={[bs.bubble, bs.bubbleCoco, s.typingBubble]}>
+              <ActivityIndicator size="small" color={Colors.red} />
+            </View>
+          </View>
+        )}
+
+        {error && <Text style={s.errorText}>{error}</Text>}
+
+        {!AI_CONFIGURED && isEmpty && (
+          <View style={s.warningBanner}>
+            <Text style={s.warningText}>⚠  API key not configured — add it in lib/cocoAI.ts</Text>
+          </View>
+        )}
+      </ScrollView>
+
+      {/* Suggested question chips */}
+      <View style={s.chips}>
+        {chips.map((q, i) => (
+          <TouchableOpacity
+            key={`${i}-${q.slice(0, 8)}`}
+            style={s.chip}
+            onPress={() => send(q)}
+            activeOpacity={0.7}
+            disabled={loading}
+          >
+            <Text style={s.chipText} numberOfLines={2}>{q}</Text>
+          </TouchableOpacity>
+        ))}
       </View>
 
-      {/* Emoji */}
-      <Text style={styles.cardEmoji}>{sound.emoji}</Text>
-
-      {/* Name */}
-      <Text style={styles.cardName}>{sound.label}</Text>
-
-      {/* Play / stop indicator */}
-      <View style={[styles.cardPlayBtn, active && { backgroundColor: sound.accent }]}>
-        <Ionicons
-          name={active ? 'pause' : 'play'}
-          size={14}
-          color={active ? '#fff' : Colors.textMuted}
+      {/* Input */}
+      <View style={s.inputBar}>
+        <TextInput
+          style={s.input}
+          value={input}
+          onChangeText={setInput}
+          placeholder="Ask about your sleep..."
+          placeholderTextColor={Colors.textMuted}
+          multiline
+          maxLength={500}
+          editable={!loading}
         />
+        <TouchableOpacity
+          style={[s.sendBtn, (!input.trim() || loading) && s.sendBtnOff]}
+          onPress={() => send(input)}
+          disabled={!input.trim() || loading}
+          activeOpacity={0.8}
+        >
+          <Text style={s.sendIcon}>↑</Text>
+        </TouchableOpacity>
       </View>
-    </TouchableOpacity>
+    </KeyboardAvoidingView>
   );
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: Colors.bgDeep },
-  scroll: { flex: 1 },
-  scrollContent: { paddingHorizontal: 24, paddingTop: 60, paddingBottom: 24 },
+const s = StyleSheet.create({
+  container:    { flex: 1, backgroundColor: Colors.bgDeep },
+  scroll:       { flex: 1 },
+  scrollContent: { paddingTop: 60, paddingBottom: 16 },
+  scrollEmpty:  { flex: 1, justifyContent: 'center' },
 
-  // Header
-  header: {
-    flexDirection: 'row', justifyContent: 'space-between',
-    alignItems: 'flex-start', marginBottom: 24,
+  emptyState: { alignItems: 'center', paddingHorizontal: 32, paddingBottom: 40 },
+  logoMark:   {
+    width: 64, height: 64, backgroundColor: Colors.red,
+    alignItems: 'center', justifyContent: 'center', marginBottom: 20,
   },
-  eyebrow: {
-    fontSize: 9, fontWeight: '900', fontStyle: 'italic',
-    letterSpacing: 3, color: Colors.red, marginBottom: 4,
-  },
-  title: {
-    fontSize: 52, fontWeight: '900', fontStyle: 'italic',
-    color: Colors.textPrimary, lineHeight: 54,
-  },
-  bar: { height: 3, width: 60, backgroundColor: Colors.red, marginTop: 6 },
-  stopBtn: { paddingTop: 14 },
+  logoC:      { fontSize: 32, fontWeight: '900', fontStyle: 'italic', color: '#fff' },
+  emptyTitle: { fontSize: 36, fontWeight: '900', fontStyle: 'italic', color: Colors.textPrimary, letterSpacing: 4, marginBottom: 8 },
+  emptySub:   { fontSize: 13, color: Colors.textMuted, textAlign: 'center', lineHeight: 20 },
 
-  // Hero banner
-  hero: {
-    borderRadius: 16,
-    overflow: 'hidden',
-    marginBottom: 20,
-    height: 120,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  heroBg: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#1a1040',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    borderRadius: 16,
-  },
-  heroContent: { flex: 1, padding: 18 },
-  heroTag: {
-    fontSize: 8, fontWeight: '900', fontStyle: 'italic',
-    letterSpacing: 2, color: Colors.red, marginBottom: 6,
-  },
-  heroTitle: {
-    fontSize: 18, fontWeight: '900', fontStyle: 'italic',
-    color: '#fff', lineHeight: 22,
-  },
-  heroSub: {
-    fontSize: 9, color: 'rgba(255,255,255,0.4)',
-    marginTop: 6, lineHeight: 13,
-  },
-  heroIconWrap: { paddingRight: 18 },
-  heroIcon: { fontSize: 48 },
+  typingBubble: { paddingVertical: 10, paddingHorizontal: 16 },
+  errorText:    { fontSize: 11, color: Colors.red, textAlign: 'center', marginTop: 8, paddingHorizontal: 24 },
 
-  // Category pills
-  catRow: { gap: 8, marginBottom: 20, paddingVertical: 2 },
-  catPill: {
-    paddingHorizontal: 14, paddingVertical: 7,
-    borderRadius: 20, borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: 'transparent',
+  warningBanner: {
+    marginHorizontal: 16, marginTop: 16, padding: 12,
+    borderWidth: 1, borderColor: Colors.warning, borderLeftWidth: 3, borderLeftColor: Colors.warning,
+    backgroundColor: Colors.warning + '11',
   },
-  catPillActive: {
-    backgroundColor: Colors.red,
-    borderColor: Colors.red,
-  },
-  catLabel: {
-    fontSize: 11, fontWeight: '700',
-    letterSpacing: 0.5, color: Colors.textMuted,
-  },
-  catLabelActive: { color: '#fff' },
+  warningText: { fontSize: 11, color: Colors.warning, fontWeight: '700' },
 
-  // Grid
-  grid: { gap: 12 },
-  gridRow: { flexDirection: 'row', gap: 12 },
+  chips: {
+    flexDirection: 'row', gap: 8, paddingHorizontal: 12, paddingVertical: 8,
+    borderTopWidth: 1, borderTopColor: Colors.border,
+  },
+  chip: {
+    flex: 1, backgroundColor: '#111', borderWidth: 1, borderColor: Colors.border,
+    borderLeftWidth: 2, borderLeftColor: Colors.red,
+    paddingHorizontal: 8, paddingVertical: 7,
+  },
+  chipText: {
+    fontSize: 9, fontWeight: '700', fontStyle: 'italic',
+    color: Colors.textMuted, letterSpacing: 0.3, lineHeight: 13,
+  },
 
-  // Sound card
-  card: {
-    height: 150,
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-    overflow: 'hidden',
+  inputBar: {
+    flexDirection: 'row', alignItems: 'flex-end', gap: 8,
+    paddingHorizontal: 12, paddingVertical: 10,
+    borderTopWidth: 1, borderTopColor: Colors.border,
+    backgroundColor: Colors.bgDeep,
   },
-  cardGlow: {
-    borderRadius: 14,
-    borderWidth: 2,
+  input: {
+    flex: 1, backgroundColor: '#111', borderWidth: 1, borderColor: Colors.border,
+    color: Colors.textPrimary, fontSize: 13,
+    paddingHorizontal: 14, paddingVertical: 10, maxHeight: 100, lineHeight: 19,
   },
-  cardTag: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 7, paddingVertical: 3,
-    borderRadius: 6, marginBottom: 10,
-  },
-  cardTagText: { fontSize: 7, fontWeight: '900', letterSpacing: 1 },
-  cardEmoji: { fontSize: 32, marginBottom: 8 },
-  cardName: {
-    fontSize: 13, fontWeight: '900', fontStyle: 'italic',
-    color: '#fff', letterSpacing: 0.3,
-  },
-  cardPlayBtn: {
-    position: 'absolute', bottom: 12, right: 12,
-    width: 28, height: 28, borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.12)',
+  sendBtn:    { width: 40, height: 40, backgroundColor: Colors.red, alignItems: 'center', justifyContent: 'center' },
+  sendBtnOff: { backgroundColor: Colors.border },
+  sendIcon:   { fontSize: 18, fontWeight: '900', color: '#fff' },
+});
+
+const gate = StyleSheet.create({
+  container: {
+    flex: 1, backgroundColor: Colors.bgDeep,
     alignItems: 'center', justifyContent: 'center',
+    padding: 40, overflow: 'hidden',
   },
-
-  // Mini player
-  miniPlayer: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    backgroundColor: '#111118',
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.10)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    paddingBottom: 28,
-    gap: 12,
+  logoMark: {
+    width: 72, height: 72, backgroundColor: Colors.red,
+    alignItems: 'center', justifyContent: 'center', marginBottom: 24,
   },
-  miniAccent: {
-    position: 'absolute', top: 0, left: 0, right: 0,
-    height: 2,
-  },
-  miniLeft: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
-  miniEmoji: { fontSize: 28 },
-  miniName: {
-    fontSize: 13, fontWeight: '900', fontStyle: 'italic',
-    color: '#fff',
-  },
-  miniSub: {
-    fontSize: 7, fontWeight: '700', letterSpacing: 1,
-    color: Colors.textMuted, marginTop: 2,
-  },
-  miniRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  miniVolRow: { flexDirection: 'row', gap: 3, alignItems: 'center', width: 60 },
-  miniVolStep: {
-    flex: 1, height: 3,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 2,
-  },
+  logoC:    { fontSize: 36, fontWeight: '900', fontStyle: 'italic', color: '#fff' },
+  title:    { fontSize: 48, fontWeight: '900', fontStyle: 'italic', color: Colors.textPrimary, letterSpacing: 4 },
+  bar:      { height: 3, width: 60, backgroundColor: Colors.red, marginVertical: 14 },
+  sub:      { fontSize: 14, color: Colors.textMuted, textAlign: 'center', lineHeight: 22, marginBottom: 32 },
+  btn:      { backgroundColor: Colors.red, paddingHorizontal: 28, paddingVertical: 14 },
+  btnText:  { fontSize: 13, fontWeight: '900', fontStyle: 'italic', color: '#fff', letterSpacing: 1 },
 });

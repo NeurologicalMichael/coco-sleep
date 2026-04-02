@@ -1,4 +1,4 @@
-import { Platform, NativeEventEmitter } from 'react-native';
+import { Platform } from 'react-native';
 import { requireNativeModule, EventEmitter } from 'expo-modules-core';
 
 export interface NativeSoundEvent {
@@ -6,6 +6,13 @@ export interface NativeSoundEvent {
   db: number;
   peakDb: number;
   timestamp: number; // ms since epoch
+}
+
+export interface NativeClipEvent {
+  path: string;      // absolute file path (.caf)
+  timestamp: number; // ms of triggering event
+  type: string;      // 'snoring' | 'talking' | 'loud_event'
+  duration: number;  // seconds
 }
 
 let Native: any = null;
@@ -53,6 +60,14 @@ export const SleepAudioEngine = {
   ): (() => void) => {
     if (!emitter) return () => {};
     const sub = emitter.addListener('onSoundEvent', cb);
+    return () => sub.remove();
+  },
+
+  addClipSavedListener: (
+    cb: (event: NativeClipEvent) => void,
+  ): (() => void) => {
+    if (!emitter) return () => {};
+    const sub = emitter.addListener('onClipSaved', cb);
     return () => sub.remove();
   },
 };

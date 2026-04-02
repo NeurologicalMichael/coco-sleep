@@ -20,6 +20,7 @@
 import * as FileSystem from 'expo-file-system';
 import { AudioEvent } from './hrvProxy';
 import { SleepAudioEngine } from '../modules/SleepAudioEngine';
+import { useSoundClipsStore, ClipType } from '../store/soundClipsStore';
 
 // expo-audio fallback imports (only used if native engine unavailable)
 let expoRequestPermission: (() => Promise<boolean>) | null = null;
@@ -90,6 +91,7 @@ export async function matchClipsToEvents(events: AudioEvent[]): Promise<AudioEve
 
 let _onEvent: ((e: AudioEvent) => void) | null = null;
 let _nativeUnsub: (() => void) | null = null;
+let _nativeClipUnsub: (() => void) | null = null;
 let _usingNative = false;
 
 // expo-audio fallback state
@@ -146,6 +148,17 @@ export async function startAudioSampling(
               type:      e.type,
             };
             _onEvent?.(evt);
+          });
+          // Subscribe to clip-saved events → persist to soundClipsStore
+          _nativeClipUnsub = SleepAudioEngine.addClipSavedListener((c) => {
+            const today = new Date().toISOString().slice(0, 10);
+            useSoundClipsStore.getState().addClip({
+              sessionDate:     today,
+              timestamp:       c.timestamp,
+              filePath:        c.path,
+              type:            (c.type as ClipType) ?? 'loud_event',
+              durationSeconds: c.duration,
+            });
           });
           return true;
         }
@@ -215,6 +228,8 @@ export async function stopAudioSampling(): Promise<void> {
   if (_usingNative) {
     _nativeUnsub?.();
     _nativeUnsub = null;
+    _nativeClipUnsub?.();
+    _nativeClipUnsub = null;
     await SleepAudioEngine.stop();
     _usingNative = false;
   }

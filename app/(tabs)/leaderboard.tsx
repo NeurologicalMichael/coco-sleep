@@ -316,13 +316,6 @@ export default function LeaderboardScreen() {
         />
       }
     >
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.eyebrow}>// COMPETITION</Text>
-        <Text style={styles.title}>LEAGUE</Text>
-        <View style={styles.titleUnderline} />
-      </View>
-
       {/* Tab row */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabScroll} contentContainerStyle={styles.tabRow}>
         {(['global', 'friends'] as Tab[]).map((t) => (

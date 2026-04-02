@@ -556,13 +556,6 @@ export default function HomeScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <Text style={styles.eyebrow}>// {getGreeting()}</Text>
-        <Text style={styles.title} numberOfLines={1} adjustsFontSizeToFit>
-          {username ? username.toUpperCase() : 'COCO'}
-        </Text>
-        <View style={styles.titleBar} />
-
         {/* ── Coco Growth Card ─────────────────────────────────────────── */}
         {(() => {
           return (

@@ -48,8 +48,8 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="sounds"
         options={{
-          title: 'Music',
-          tabBarIcon: ({ focused }) => tabIcon(focused, 'musical-notes', 'musical-notes-outline'),
+          title: 'Coco AI',
+          tabBarIcon: ({ focused }) => tabIcon(focused, 'sparkles', 'sparkles-outline'),
         }}
       />
       <Tabs.Screen
@@ -59,8 +59,8 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="report"
         options={{
-          title: 'Statistics',
-          tabBarIcon: ({ focused }) => tabIcon(focused, 'stats-chart', 'stats-chart-outline'),
+          title: 'Log',
+          tabBarIcon: ({ focused }) => tabIcon(focused, 'journal', 'journal-outline'),
         }}
       />
       <Tabs.Screen
