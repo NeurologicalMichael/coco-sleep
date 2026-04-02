@@ -2,7 +2,7 @@ import { useState, useRef, useCallback } from 'react';
 import { useFocusEffect } from 'expo-router';
 import {
   ScrollView, View, Text, StyleSheet, TouchableOpacity, TextInput,
-  ActivityIndicator, Alert, Modal, RefreshControl, Share, Platform,
+  ActivityIndicator, Alert, Modal, RefreshControl, Share, Platform, Image,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Colors } from '../../constants/colors';
@@ -11,6 +11,7 @@ import { useAuthStore } from '../../store/authStore';
 import { usePurchaseStore } from '../../store/purchaseStore';
 import { useRecoveryStore } from '../../store/recoveryStore';
 import { useCocoStore } from '../../store/cocoStore';
+import { useUserProfileStore } from '../../store/userProfileStore';
 import { ProGate } from '../../components/ProGate';
 import {
   fetchGlobalLeaderboard, fetchFriendsLeaderboard, fetchGroupLeaderboard,
@@ -20,6 +21,19 @@ import {
 import { scheduleLeagueRivalNotification } from '../../utils/notifications';
 
 type Tab = 'global' | 'friends' | string; // string = group id
+type SortBy = 'score' | 'duration' | 'streak';
+
+function UserAvatar({ uri, initial, size, borderColor }: { uri?: string | null; initial: string; size: number; borderColor?: string }) {
+  return (
+    <View style={{ width: size, height: size, borderRadius: size / 2, overflow: 'hidden', backgroundColor: '#1a1a2e', borderWidth: 2, borderColor: borderColor ?? Colors.border, alignItems: 'center', justifyContent: 'center' }}>
+      {uri ? (
+        <Image source={{ uri }} style={{ width: size, height: size }} />
+      ) : (
+        <Text style={{ fontSize: size * 0.38, fontWeight: '900', color: Colors.textPrimary }}>{initial.toUpperCase()}</Text>
+      )}
+    </View>
+  );
+}
 
 function LeagueStatsChips({ stats, style }: { stats: LeagueDetailStats; style?: object }) {
   const durationH = Math.floor(stats.avgDurationMins / 60);
@@ -72,7 +86,9 @@ export default function LeaderboardScreen() {
   const { isPremium } = usePurchaseStore();
   const { history } = useRecoveryStore();
   const { streak } = useCocoStore();
+  const { profilePictureUri: myProfilePic } = useUserProfileStore();
   const [tab, setTab] = useState<Tab>('global');
+  const [sortBy, setSortBy] = useState<SortBy>('score');
   const [global, setGlobal] = useState<LeaderboardEntry[]>([]);
   const [friends, setFriends] = useState<LeaderboardEntry[]>([]);
   const [groups, setGroups] = useState<LeaderboardGroup[]>([]);
@@ -275,10 +291,19 @@ export default function LeaderboardScreen() {
     // Always ensure current user appears — inject local data if Supabase is missing them
     if (userId && !entries.some((e) => e.userId === userId)) {
       const local = buildLocalEntry();
-      if (local) {
-        entries = [...entries, local].sort((a, b) => b.avgScore - a.avgScore);
-      }
+      if (local) entries = [...entries, local];
     }
+
+    // Sort by selected metric
+    entries = [...entries].sort((a, b) => {
+      if (sortBy === 'streak') return b.streak - a.streak;
+      if (sortBy === 'duration') {
+        const aH = a.leagueStats?.totalHours ?? 0;
+        const bH = b.leagueStats?.totalHours ?? 0;
+        return bH !== aH ? bH - aH : b.avgScore - a.avgScore;
+      }
+      return b.avgScore - a.avgScore;
+    });
     return entries;
   }
 
@@ -304,262 +329,285 @@ export default function LeaderboardScreen() {
     );
   }
 
+  const allEntries = getEntries();
+  const myRank = allEntries.findIndex((e) => e.userId === userId);
+  const myEntry = myRank >= 0 ? allEntries[myRank] : null;
+  const podiumSlots = [allEntries[1] ?? null, allEntries[0] ?? null, allEntries[2] ?? null]; // 2nd, 1st, 3rd
+  const listEntries = allEntries.slice(3);
+  const showLeaderboard = !(tab === 'global' && !isPremium);
+
+  function getSortScore(entry: LeaderboardEntry): string {
+    if (sortBy === 'streak') return `${entry.streak}d streak`;
+    if (sortBy === 'duration') return `${entry.leagueStats?.totalHours ?? 0}h total`;
+    return `${entry.avgScore} avg`;
+  }
+
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.content}
-      refreshControl={
-        <RefreshControl
-          refreshing={loading && loadedOnce.current}
-          onRefresh={() => void load(true)}
-          tintColor={Colors.red}
-        />
-      }
-    >
-      {/* Tab row */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabScroll} contentContainerStyle={styles.tabRow}>
-        {(['global', 'friends'] as Tab[]).map((t) => (
-          <TouchableOpacity key={t} style={[styles.tabBtn, tab === t && styles.tabBtnActive]} onPress={() => setTab(t)}>
-            <Text style={[styles.tabLabel, tab === t && styles.tabLabelActive]}>
-              {t === 'global' ? `GLOBAL${!isPremium ? ' — PRO' : ''}` : 'FRIENDS'}
-            </Text>
-          </TouchableOpacity>
-        ))}
-        {groups.map((grp) => (
-          <TouchableOpacity key={grp.id} style={[styles.tabBtn, tab === grp.id && styles.tabBtnActive]} onPress={() => setTab(grp.id)}>
-            <Text style={[styles.tabLabel, tab === grp.id && styles.tabLabelActive]}>{grp.name.toUpperCase()}</Text>
-          </TouchableOpacity>
-        ))}
-        <TouchableOpacity
-          style={styles.tabBtnNew}
-          onPress={() => { setGroupModalMode('create'); setShowGroupModal(true); }}
-        >
-          <Text style={styles.tabBtnNewText}>+ GROUP</Text>
-        </TouchableOpacity>
-      </ScrollView>
-
-      {/* Group info bar */}
-      {activeGroup && (
-        <View style={styles.groupInfoBar}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.groupInfoCode}>
-              CODE: <Text style={styles.groupInfoCodeVal}>{activeGroup.inviteCode.toUpperCase()}</Text>
-            </Text>
-            {activeGroup.endsAt && (
-              <Text style={[styles.groupInfoHint, { color: new Date(activeGroup.endsAt).getTime() < Date.now() ? Colors.red : Colors.gold }]}>
-                {countdownLabel(activeGroup.endsAt)}
+    <View style={styles.outerContainer}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl
+            refreshing={loading && loadedOnce.current}
+            onRefresh={() => void load(true)}
+            tintColor={Colors.red}
+          />
+        }
+      >
+        {/* Tab row */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabScroll} contentContainerStyle={styles.tabRow}>
+          {(['global', 'friends'] as Tab[]).map((t) => (
+            <TouchableOpacity key={t} style={[styles.tabBtn, tab === t && styles.tabBtnActive]} onPress={() => setTab(t)}>
+              <Text style={[styles.tabLabel, tab === t && styles.tabLabelActive]}>
+                {t === 'global' ? `GLOBAL${!isPremium ? ' — PRO' : ''}` : 'FRIENDS'}
               </Text>
-            )}
-            {!activeGroup.endsAt && (
-              <Text style={styles.groupInfoHint}>No deadline · ongoing</Text>
-            )}
-          </View>
-          <View style={{ alignItems: 'flex-end', gap: 8 }}>
-            <TouchableOpacity onPress={() => void handleShareGroup(activeGroup)}>
-              <Text style={styles.shareBtn}>SHARE</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => handleLeaveGroup(activeGroup)}>
-              <Text style={styles.leaveBtn}>LEAVE</Text>
+          ))}
+          {groups.map((grp) => (
+            <TouchableOpacity key={grp.id} style={[styles.tabBtn, tab === grp.id && styles.tabBtnActive]} onPress={() => setTab(grp.id)}>
+              <Text style={[styles.tabLabel, tab === grp.id && styles.tabLabelActive]}>{grp.name.toUpperCase()}</Text>
             </TouchableOpacity>
+          ))}
+          <TouchableOpacity
+            style={styles.tabBtnNew}
+            onPress={() => { setGroupModalMode('create'); setShowGroupModal(true); }}
+          >
+            <Text style={styles.tabBtnNewText}>+ GROUP</Text>
+          </TouchableOpacity>
+        </ScrollView>
+
+        {/* Group info bar */}
+        {activeGroup && (
+          <View style={styles.groupInfoBar}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.groupInfoCode}>
+                CODE: <Text style={styles.groupInfoCodeVal}>{activeGroup.inviteCode.toUpperCase()}</Text>
+              </Text>
+              {activeGroup.endsAt && (
+                <Text style={[styles.groupInfoHint, { color: new Date(activeGroup.endsAt).getTime() < Date.now() ? Colors.red : Colors.gold }]}>
+                  {countdownLabel(activeGroup.endsAt)}
+                </Text>
+              )}
+              {!activeGroup.endsAt && (
+                <Text style={styles.groupInfoHint}>No deadline · ongoing</Text>
+              )}
+            </View>
+            <View style={{ alignItems: 'flex-end', gap: 8 }}>
+              <TouchableOpacity onPress={() => void handleShareGroup(activeGroup)}>
+                <Text style={styles.shareBtn}>SHARE</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => handleLeaveGroup(activeGroup)}>
+                <Text style={styles.leaveBtn}>LEAVE</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
-      )}
+        )}
 
-      {/* Stake banner */}
-      {activeGroup?.stake && (
-        <View style={styles.stakeBanner}>
-          <DiagonalStripes color={Colors.gold} opacity={0.06} />
-          <Text style={styles.stakeLabel}>// THE STAKE</Text>
-          <Text style={styles.stakeText}>{activeGroup.stake}</Text>
-        </View>
-      )}
-
-      {/* Winner banner (league ended) */}
-      {winner && (
-        <View style={styles.winnerBanner}>
-          <DiagonalStripes color={Colors.gold} opacity={0.08} />
-          <Text style={styles.winnerLabel}>// LEAGUE OVER — WINNER</Text>
-          <Text style={styles.winnerName}>{winner.tierEmoji} @{winner.username}</Text>
-          <Text style={styles.winnerScore}>{winner.avgScore} AVG SCORE · {winner.streak}D STREAK</Text>
-          {activeGroup?.stake && (
-            <Text style={styles.winnerStake}>Stake: {activeGroup.stake}</Text>
-          )}
-        </View>
-      )}
-
-      {/* Global tab — pro only */}
-      {tab === 'global' && !isPremium && (
-        <ProGate
-          feature="Global Leaderboard"
-          description="Compete against every Coco user worldwide. See where you rank globally."
-          style={{ marginTop: 16 }}
-        >
-          {null}
-        </ProGate>
-      )}
-
-      {/* Leaderboard entries */}
-      {(tab === 'global' && !isPremium) ? null : loading ? (
-        <ActivityIndicator color={Colors.red} style={{ marginTop: 40 }} />
-      ) : getEntries().length === 0 ? (
-        <View style={styles.noDataOuter}>
-          <DiagonalStripes opacity={0.04} />
-          <View style={styles.noDataInner}>
-            <Text style={styles.noDataText}>
-              {tab === 'friends' ? 'NO FRIENDS YET.' : tab !== 'global' ? 'NO DATA YET.' : 'NO DATA YET.'}
-            </Text>
-            <Text style={styles.noDataSub}>
-              {tab === 'friends'
-                ? 'Search for friends below to add them.'
-                : tab !== 'global'
-                  ? 'Share your invite code so others can join this group.'
-                  : 'Complete a sleep session to appear here.'}
-            </Text>
+        {/* Stake banner */}
+        {activeGroup?.stake && (
+          <View style={styles.stakeBanner}>
+            <DiagonalStripes color={Colors.gold} opacity={0.06} />
+            <Text style={styles.stakeLabel}>// THE STAKE</Text>
+            <Text style={styles.stakeText}>{activeGroup.stake}</Text>
           </View>
-        </View>
-      ) : (() => {
-        const entries = getEntries();
-        const myRank = entries.findIndex((e) => e.userId === userId);
-        const myEntry = myRank >= 0 ? entries[myRank] : null;
+        )}
 
-        return (
+        {/* Winner banner (league ended) */}
+        {winner && (
+          <View style={styles.winnerBanner}>
+            <DiagonalStripes color={Colors.gold} opacity={0.08} />
+            <Text style={styles.winnerLabel}>// LEAGUE OVER — WINNER</Text>
+            <Text style={styles.winnerName}>{winner.tierEmoji} @{winner.username}</Text>
+            <Text style={styles.winnerScore}>{winner.avgScore} AVG SCORE · {winner.streak}D STREAK</Text>
+            {activeGroup?.stake && (
+              <Text style={styles.winnerStake}>Stake: {activeGroup.stake}</Text>
+            )}
+          </View>
+        )}
+
+        {/* Global tab — pro only */}
+        {tab === 'global' && !isPremium && (
+          <ProGate
+            feature="Global Leaderboard"
+            description="Compete against every Coco user worldwide. See where you rank globally."
+            style={{ marginTop: 16 }}
+          >
+            {null}
+          </ProGate>
+        )}
+
+        {/* Leaderboard content */}
+        {showLeaderboard && (loading ? (
+          <ActivityIndicator color={Colors.red} style={{ marginTop: 40 }} />
+        ) : allEntries.length === 0 ? (
+          <View style={styles.noDataOuter}>
+            <DiagonalStripes opacity={0.04} />
+            <View style={styles.noDataInner}>
+              <Text style={styles.noDataText}>
+                {tab === 'friends' ? 'NO FRIENDS YET.' : tab !== 'global' ? 'NO DATA YET.' : 'NO DATA YET.'}
+              </Text>
+              <Text style={styles.noDataSub}>
+                {tab === 'friends'
+                  ? 'Search for friends below to add them.'
+                  : tab !== 'global'
+                    ? 'Share your invite code so others can join this group.'
+                    : 'Complete a sleep session to appear here.'}
+              </Text>
+            </View>
+          </View>
+        ) : (
           <>
-            {/* My rank card */}
-            {myEntry && (
-              <View style={styles.myRankCard}>
-                <DiagonalStripes color={Colors.red} opacity={0.06} />
-                <View style={styles.myRankInner}>
-                  <View style={styles.myRankLeft}>
-                    <Text style={styles.myRankPos}>#{myRank + 1}</Text>
-                    <Text style={styles.myRankLabel}>YOUR RANK</Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.myRankEmoji}>{myEntry.tierEmoji}</Text>
-                    <Text style={styles.myRankName}>@{myEntry.username}</Text>
-                    <Text style={styles.myRankSub}>{myEntry.streak}d streak · {myEntry.nights} {myEntry.nights === 1 ? 'night' : 'nights'} this week</Text>
-                    {tab !== 'global' && myEntry.leagueStats && (
-                      <LeagueStatsChips stats={myEntry.leagueStats} style={{ marginTop: 6 }} />
+            {/* ── TOP 3 PODIUM ── */}
+            <View style={styles.podiumSection}>
+              {podiumSlots.map((entry, slotIdx) => {
+                const realRank = slotIdx === 0 ? 2 : slotIdx === 1 ? 1 : 3; // 2nd, 1st, 3rd
+                const podiumColors = ['#C0C0C0', '#FFD700', '#CD7F32'];
+                const color = podiumColors[slotIdx];
+                const isMe = entry?.userId === userId;
+                const avatarSize = realRank === 1 ? 72 : 56;
+                const avatarPic = isMe ? myProfilePic : null;
+                const initial = entry ? entry.username[0] : '?';
+                const scoreVal = entry ? getSortScore(entry) : '—';
+                return (
+                  <View key={slotIdx} style={[styles.podiumSlot, realRank === 1 && styles.podiumSlotFirst]}>
+                    {entry ? (
+                      <>
+                        <Text style={[styles.podiumUsername, isMe && { color: Colors.red }]} numberOfLines={1}>
+                          @{entry.username}
+                        </Text>
+                        <View style={[styles.podiumAvatarWrap, { borderColor: color }]}>
+                          <UserAvatar uri={avatarPic} initial={initial} size={avatarSize} borderColor={color} />
+                          <View style={[styles.podiumMedalBadge, { backgroundColor: color }]}>
+                            <Text style={styles.podiumMedalText}>{realRank}</Text>
+                          </View>
+                        </View>
+                        <Text style={[styles.podiumScore, { color }]}>{scoreVal}</Text>
+                      </>
+                    ) : (
+                      <>
+                        <Text style={styles.podiumEmptyName}>—</Text>
+                        <View style={[styles.podiumAvatarWrap, { borderColor: 'transparent' }]}>
+                          <View style={[{ width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2, backgroundColor: '#1a1a1a', borderWidth: 2, borderColor: '#333', alignItems: 'center', justifyContent: 'center' }]}>
+                            <Text style={{ fontSize: avatarSize * 0.38, color: '#333', fontWeight: '900' }}>?</Text>
+                          </View>
+                          <View style={[styles.podiumMedalBadge, { backgroundColor: '#333' }]}>
+                            <Text style={[styles.podiumMedalText, { color: '#666' }]}>{realRank}</Text>
+                          </View>
+                        </View>
+                        <Text style={[styles.podiumScore, { color: '#333' }]}>—</Text>
+                      </>
                     )}
                   </View>
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={[styles.myRankScore, { color: myEntry.avgScore >= 75 ? Colors.green : myEntry.avgScore >= 50 ? Colors.gold : Colors.red }]}>
-                      {myEntry.avgScore}
-                    </Text>
-                    <Text style={styles.myRankScoreLabel}>AVG</Text>
-                    <Text style={[styles.myRankBest, { color: Colors.gold }]}>↑{myEntry.bestScore} BEST</Text>
-                  </View>
-                </View>
-              </View>
-            )}
+                );
+              })}
+            </View>
 
-            {/* Full list */}
-            {entries.map((entry, i) => {
+            {/* ── RANK 4+ LIST ── */}
+            {listEntries.map((entry, i) => {
+              const rank = i + 4;
               const isMe = entry.userId === userId;
-              const scoreColor = entry.avgScore >= 75 ? Colors.green : entry.avgScore >= 50 ? Colors.gold : Colors.red;
-              const podiumColors = ['#FFD700', '#C0C0C0', '#CD7F32'];
-              const rankColor = i < 3 ? podiumColors[i] : Colors.textMuted;
-              const podiumMedal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : null;
+              const avatarPic = isMe ? myProfilePic : null;
               return (
-                <View
-                  key={entry.userId}
-                  style={[
-                    styles.entryOuter,
-                    isMe && styles.entryOuterMe,
-                    i < 3 && styles.entryOuterPodium,
-                    i === 0 && { borderLeftColor: podiumColors[0], borderColor: podiumColors[0] },
-                    i === 1 && { borderLeftColor: podiumColors[1] },
-                    i === 2 && { borderLeftColor: podiumColors[2] },
-                  ]}
-                >
-                  <DiagonalStripes color={isMe ? Colors.red : i < 3 ? podiumColors[i] : Colors.textMuted} opacity={0.05} />
-                  <View style={styles.entryInner}>
-                    <View style={styles.rankBlock}>
-                      {podiumMedal
-                        ? <Text style={styles.rankMedal}>{podiumMedal}</Text>
-                        : <Text style={[styles.rank, { color: rankColor }]}>#{i + 1}</Text>}
-                    </View>
-
-                    <View style={{ flex: 1 }}>
-                      <View style={styles.entryNameRow}>
-                        <Text style={styles.entryTierEmoji}>{entry.tierEmoji}</Text>
-                        <Text style={[styles.entryName, isMe && { color: Colors.red }]}>
-                          @{entry.username}{isMe ? ' (YOU)' : ''}
-                        </Text>
-                      </View>
-                      <Text style={styles.entrySub}>
-                        {entry.streak}d streak · {entry.nights} {entry.nights === 1 ? 'night' : 'nights'}
-                      </Text>
-                      {tab !== 'global' && entry.leagueStats && (
-                        <LeagueStatsChips stats={entry.leagueStats} />
-                      )}
-                      {tab !== 'global' && !entry.leagueStats && !isMe && (
-                        <Text style={styles.entryPrivate}>// stats private</Text>
-                      )}
-                    </View>
-
-                    <View style={{ alignItems: 'flex-end' }}>
-                      <Text style={[styles.entryScore, { color: scoreColor }]}>{entry.avgScore}</Text>
-                      <Text style={styles.entryScoreLabel}>7D AVG</Text>
-                      {entry.bestScore !== entry.avgScore && (
-                        <Text style={styles.entryBest}>↑{entry.bestScore}</Text>
-                      )}
-                    </View>
-                  </View>
+                <View key={entry.userId} style={[styles.listRow, isMe && styles.listRowMe]}>
+                  <Text style={[styles.listRank, isMe && { color: Colors.red }]}>#{rank}</Text>
+                  <UserAvatar uri={avatarPic} initial={entry.username[0]} size={36} borderColor={isMe ? Colors.red : Colors.border} />
+                  <Text style={[styles.listUsername, isMe && { color: Colors.red }]} numberOfLines={1}>
+                    @{entry.username}{isMe ? ' (YOU)' : ''}
+                  </Text>
+                  <Text style={[styles.listScore, { color: entry.avgScore >= 75 ? Colors.green : entry.avgScore >= 50 ? Colors.gold : Colors.red }]}>
+                    {getSortScore(entry)}
+                  </Text>
                 </View>
               );
             })}
           </>
-        );
-      })()}
+        ))}
 
-      {/* Join existing group */}
-      <TouchableOpacity
-        style={styles.joinGroupBtn}
-        onPress={() => { setGroupModalMode('join'); setShowGroupModal(true); }}
-      >
-        <View style={styles.joinGroupInner}>
-          <Text style={styles.joinGroupText}>JOIN A GROUP BY CODE →</Text>
-        </View>
-      </TouchableOpacity>
-
-      {/* Add friend section */}
-      {tab === 'friends' && (
-        <>
-          <Text style={[styles.sectionLabel, { marginTop: 28 }]}>ADD A FRIEND</Text>
-          <View style={styles.searchOuter}>
-            <TextInput
-              style={styles.searchInput}
-              value={searchQuery}
-              onChangeText={handleSearch}
-              placeholder="search username..."
-              placeholderTextColor={Colors.textMuted}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
+        {/* Join existing group */}
+        <TouchableOpacity
+          style={styles.joinGroupBtn}
+          onPress={() => { setGroupModalMode('join'); setShowGroupModal(true); }}
+        >
+          <View style={styles.joinGroupInner}>
+            <Text style={styles.joinGroupText}>JOIN A GROUP BY CODE →</Text>
           </View>
+        </TouchableOpacity>
 
-          {searching && <ActivityIndicator color={Colors.red} style={{ marginTop: 12 }} />}
-
-          {!searching && searchResult !== 'not_found' && searchResult !== null && (
-            <View style={styles.resultRow}>
-              <Text style={styles.resultName}>@{searchResult.username}</Text>
-              {searchResult.id === userId ? (
-                <Text style={styles.resultSelf}>That's you!</Text>
-              ) : addedIds.has(searchResult.id) ? (
-                <Text style={styles.resultAdded}>ADDED</Text>
-              ) : (
-                <TouchableOpacity style={styles.addBtn} onPress={() => void handleAdd(searchResult!.id)}>
-                  <Text style={styles.addBtnText}>+ ADD</Text>
-                </TouchableOpacity>
-              )}
+        {/* Add friend section */}
+        {tab === 'friends' && (
+          <>
+            <Text style={[styles.sectionLabel, { marginTop: 28 }]}>ADD A FRIEND</Text>
+            <View style={styles.searchOuter}>
+              <TextInput
+                style={styles.searchInput}
+                value={searchQuery}
+                onChangeText={handleSearch}
+                placeholder="search username..."
+                placeholderTextColor={Colors.textMuted}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
             </View>
-          )}
 
-          {!searching && searchQuery.length > 0 && searchResult === 'not_found' && (
-            <Text style={styles.notFound}>No user found.</Text>
-          )}
-        </>
-      )}
+            {searching && <ActivityIndicator color={Colors.red} style={{ marginTop: 12 }} />}
+
+            {!searching && searchResult !== 'not_found' && searchResult !== null && (
+              <View style={styles.resultRow}>
+                <Text style={styles.resultName}>@{searchResult.username}</Text>
+                {searchResult.id === userId ? (
+                  <Text style={styles.resultSelf}>That's you!</Text>
+                ) : addedIds.has(searchResult.id) ? (
+                  <Text style={styles.resultAdded}>ADDED</Text>
+                ) : (
+                  <TouchableOpacity style={styles.addBtn} onPress={() => void handleAdd(searchResult!.id)}>
+                    <Text style={styles.addBtnText}>+ ADD</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+
+            {!searching && searchQuery.length > 0 && searchResult === 'not_found' && (
+              <Text style={styles.notFound}>No user found.</Text>
+            )}
+          </>
+        )}
+      </ScrollView>
+
+      {/* ── SORT BUTTONS + PINNED USER BAR ── */}
+      <View style={styles.bottomFixed}>
+        {/* Sort buttons */}
+        <View style={styles.sortRow}>
+          {([
+            { key: 'score' as SortBy, label: 'AVG SCORE' },
+            { key: 'duration' as SortBy, label: 'DURATION' },
+            { key: 'streak' as SortBy, label: 'STREAK' },
+          ]).map(({ key, label }) => (
+            <TouchableOpacity
+              key={key}
+              style={[styles.sortBtn, sortBy === key && styles.sortBtnActive]}
+              onPress={() => setSortBy(key)}
+            >
+              <Text style={[styles.sortBtnText, sortBy === key && styles.sortBtnTextActive]}>{label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* Pinned user rank bar */}
+        {myEntry && (
+          <View style={styles.pinnedBar}>
+            <DiagonalStripes color={Colors.red} opacity={0.06} />
+            <View style={styles.pinnedInner}>
+              <Text style={styles.pinnedRank}>#{myRank + 1}</Text>
+              <UserAvatar uri={myProfilePic} initial={(username ?? 'Y')[0]} size={34} borderColor={Colors.red} />
+              <Text style={styles.pinnedUsername} numberOfLines={1}>@{myEntry.username}</Text>
+              <Text style={[styles.pinnedScore, { color: myEntry.avgScore >= 75 ? Colors.green : myEntry.avgScore >= 50 ? Colors.gold : Colors.red }]}>
+                {getSortScore(myEntry)}
+              </Text>
+            </View>
+          </View>
+        )}
+      </View>
 
       {/* Group management modal */}
       <Modal visible={showGroupModal} transparent animationType="slide" onRequestClose={() => setShowGroupModal(false)}>
@@ -696,13 +744,14 @@ export default function LeaderboardScreen() {
           </View>
         </View>
       </Modal>
-    </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  outerContainer: { flex: 1, backgroundColor: Colors.bgDeep },
   container: { flex: 1, backgroundColor: Colors.bgDeep },
-  content: { paddingBottom: 60, paddingTop: 60 },
+  content: { paddingBottom: 8, paddingTop: 60 },
 
   header: { paddingHorizontal: 24, paddingTop: 60, marginBottom: 20 },
   eyebrow: { fontSize: 9, fontWeight: '900', fontStyle: 'italic', letterSpacing: 3, color: Colors.red, marginBottom: 4 },
@@ -865,4 +914,37 @@ const styles = StyleSheet.create({
   emptyTitle: { fontSize: 28, fontWeight: '900', fontStyle: 'italic', color: Colors.textPrimary, marginBottom: 8 },
   emptyBar: { height: 3, width: 40, backgroundColor: Colors.red, marginBottom: 16 },
   emptySub: { fontSize: 14, color: Colors.textSecondary, textAlign: 'center', lineHeight: 22 },
+
+  // Podium
+  podiumSection: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8, gap: 8 },
+  podiumSlot: { flex: 1, alignItems: 'center', paddingBottom: 0 },
+  podiumSlotFirst: { transform: [{ translateY: -14 }] },
+  podiumAvatarWrap: { position: 'relative', marginVertical: 6 },
+  podiumMedalBadge: { position: 'absolute', bottom: -4, right: -4, width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  podiumMedalText: { fontSize: 10, fontWeight: '900', color: '#000' },
+  podiumUsername: { fontSize: 10, fontWeight: '900', fontStyle: 'italic', color: Colors.textPrimary, letterSpacing: 0.5, textAlign: 'center', maxWidth: 90 },
+  podiumEmptyName: { fontSize: 10, color: '#333', fontWeight: '900', textAlign: 'center' },
+  podiumScore: { fontSize: 11, fontWeight: '900', letterSpacing: 0.5, textAlign: 'center', marginTop: 2 },
+
+  // Rank 4+ list rows
+  listRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 24, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  listRowMe: { backgroundColor: 'rgba(220,38,38,0.06)' },
+  listRank: { width: 32, fontSize: 13, fontWeight: '900', fontStyle: 'italic', color: Colors.textMuted, textAlign: 'center' },
+  listUsername: { flex: 1, fontSize: 13, fontWeight: '900', fontStyle: 'italic', color: Colors.textPrimary },
+  listScore: { fontSize: 12, fontWeight: '900', letterSpacing: 0.5 },
+
+  // Sort buttons
+  bottomFixed: { backgroundColor: Colors.bgDeep, borderTopWidth: 1, borderTopColor: Colors.border },
+  sortRow: { flexDirection: 'row', paddingHorizontal: 16, paddingTop: 10, paddingBottom: 4, gap: 8 },
+  sortBtn: { flex: 1, paddingVertical: 8, borderWidth: 1.5, borderColor: Colors.border, borderLeftWidth: 3, borderLeftColor: Colors.textMuted, backgroundColor: Colors.bgCard, alignItems: 'center' },
+  sortBtnActive: { borderColor: Colors.red, borderLeftColor: Colors.red, backgroundColor: Colors.redDim },
+  sortBtnText: { fontSize: 8, fontWeight: '900', fontStyle: 'italic', letterSpacing: 1.5, color: Colors.textMuted },
+  sortBtnTextActive: { color: Colors.red },
+
+  // Pinned user bar
+  pinnedBar: { overflow: 'hidden', backgroundColor: Colors.bgCard, borderTopWidth: 2, borderTopColor: Colors.red },
+  pinnedInner: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 10, gap: 12 },
+  pinnedRank: { fontSize: 18, fontWeight: '900', fontStyle: 'italic', color: Colors.red, minWidth: 40 },
+  pinnedUsername: { flex: 1, fontSize: 13, fontWeight: '900', fontStyle: 'italic', color: Colors.textPrimary },
+  pinnedScore: { fontSize: 13, fontWeight: '900', letterSpacing: 0.5 },
 });
