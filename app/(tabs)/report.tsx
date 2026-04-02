@@ -176,77 +176,6 @@ function BarChart({ buckets, maxVal, formatVal, colorFn, ticks }: {
   );
 }
 
-// Grouped 2-bar chart for "in bed" vs "asleep"
-function GroupedBarChart({ buckets }: { buckets: { label: string; inBed: number | null; asleep: number | null }[] }) {
-  const maxVal = 12;
-  const yTicks = [0, 3, 6, 9, 12];
-
-  return (
-    <View style={{ flexDirection: 'row' }}>
-      {/* Y-axis labels */}
-      <View style={{ width: 32, height: CHART_H + 18 }}>
-        {yTicks.map((t, i) => (
-          <Text
-            key={i}
-            style={{
-              position: 'absolute',
-              top: (1 - t / maxVal) * CHART_H - 5,
-              right: 4,
-              fontSize: 7, fontWeight: '900', color: Colors.textMuted, textAlign: 'right',
-            }}
-          >
-            {t}h
-          </Text>
-        ))}
-      </View>
-
-      <View style={{ flex: 1 }}>
-        <View style={{ height: CHART_H, position: 'relative' }}>
-          {/* Grid lines */}
-          {yTicks.map((t, i) => (
-            <View key={i} style={{
-              position: 'absolute', top: (1 - t / maxVal) * CHART_H,
-              left: 0, right: 0, height: 1,
-              backgroundColor: t === 0 ? Colors.textMuted : Colors.border,
-              opacity: t === 0 ? 0.5 : 0.35,
-            }} />
-          ))}
-
-          {/* Bars */}
-          <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: '100%', gap: 3 }}>
-            {buckets.map((b, i) => {
-              const bedH  = b.inBed  !== null ? Math.max((b.inBed  / maxVal) * CHART_H, 3) : 0;
-              const slpH  = b.asleep !== null ? Math.max((b.asleep / maxVal) * CHART_H, 3) : 0;
-              return (
-                <View key={i} style={{ flex: 1, alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
-                  <View style={{ flexDirection: 'row', gap: 2, alignItems: 'flex-end' }}>
-                    <View style={{ width: 10 }}>
-                      {b.inBed !== null && <Text style={{ fontSize: 6, fontWeight: '900', color: Colors.info, textAlign: 'center', marginBottom: 1 }}>{b.inBed}h</Text>}
-                      <View style={{ width: 10, height: bedH, backgroundColor: Colors.info }} />
-                    </View>
-                    <View style={{ width: 10 }}>
-                      {b.asleep !== null && <Text style={{ fontSize: 6, fontWeight: '900', color: Colors.green, textAlign: 'center', marginBottom: 1 }}>{b.asleep}h</Text>}
-                      <View style={{ width: 10, height: slpH, backgroundColor: Colors.green }} />
-                    </View>
-                  </View>
-                </View>
-              );
-            })}
-          </View>
-        </View>
-
-        {/* X-axis */}
-        <View style={{ flexDirection: 'row', borderTopWidth: 1, borderTopColor: Colors.border, paddingTop: 4 }}>
-          {buckets.map((b, i) => (
-            <View key={i} style={{ flex: 1, alignItems: 'center' }}>
-              <Text style={{ fontSize: 7, fontWeight: '900', letterSpacing: 0.3, color: Colors.textMuted }}>{b.label}</Text>
-            </View>
-          ))}
-        </View>
-      </View>
-    </View>
-  );
-}
 
 // ─── Averages Section ─────────────────────────────────────────────────────────
 
@@ -260,12 +189,6 @@ function AveragesSection({ history }: { history: ProcessedSession[] }) {
   const scoreBuckets = avgOf(buckets, (s) => s.recovery.recoveryScore);
   const durBuckets   = avgOf(buckets, (s) => s.durationHours);
   const soundBuckets = avgOf(buckets, (s) => (s.audioEvents ?? []).filter((e) => e.type !== 'quiet').length);
-
-  const sleepTimeBuckets = buckets.map((b) => ({
-    label: b.label,
-    inBed:  b.sessions.length > 0 ? parseFloat((b.sessions.reduce((a, s) => a + s.durationHours, 0) / b.sessions.length).toFixed(1)) : null,
-    asleep: b.sessions.length > 0 ? parseFloat((b.sessions.reduce((a, s) => a + s.durationHours * (s.scores.sleepEfficiency / 100), 0) / b.sessions.length).toFixed(1)) : null,
-  }));
 
   return (
     <View style={avgSt.container}>
@@ -286,21 +209,6 @@ function AveragesSection({ history }: { history: ProcessedSession[] }) {
 
       <Text style={avgSt.label}>// SLEEP SOUNDS DETECTED</Text>
       <View style={avgSt.card}><BarChart buckets={soundBuckets} maxVal={Math.max(10, ...soundBuckets.map((b) => b.avg ?? 0))} formatVal={(v) => `${Math.round(v)}`} colorFn={() => '#A855F7'} /></View>
-
-      <Text style={avgSt.label}>// TIME IN BED vs ASLEEP</Text>
-      <View style={avgSt.card}>
-        <GroupedBarChart buckets={sleepTimeBuckets} />
-        <View style={{ flexDirection: 'row', gap: 14, marginTop: 8 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-            <View style={{ width: 8, height: 8, backgroundColor: Colors.info }} />
-            <Text style={avgSt.legendText}>IN BED</Text>
-          </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-            <View style={{ width: 8, height: 8, backgroundColor: Colors.green }} />
-            <Text style={avgSt.legendText}>ASLEEP</Text>
-          </View>
-        </View>
-      </View>
     </View>
   );
 }
@@ -439,8 +347,8 @@ function NightPanel({ session, isPremium }: { session: ProcessedSession; isPremi
           { label: 'DURATION',    value: `${durationHours.toFixed(1)}h` },
           { label: 'EFFICIENCY',  value: `${scores.sleepEfficiency}%` },
           { label: 'HRV PROXY',   value: `${Math.round(recovery.hrvProxy)}` },
-          { label: 'LATENCY',     value: scores.sleepLatencyMinutes > 0 ? `${scores.sleepLatencyMinutes}M` : '—' },
-          { label: 'WASO',        value: scores.wasoMinutes > 0 ? `${scores.wasoMinutes}M` : '—' },
+          { label: 'WENT TO BED', value: formatClockTime(startedAt) },
+          { label: 'WOKE UP',     value: formatClockTime(endedAt) },
           { label: session.watchHeartRate ? 'AVG HR' : 'DISRUPTIONS',
             value: session.watchHeartRate ? `${session.watchHeartRate}` : `${scores.disruptionCount ?? 0}` },
         ].map((s) => (

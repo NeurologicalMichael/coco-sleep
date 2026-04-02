@@ -149,7 +149,6 @@ export function StageTimeline({ events, audioEvents = [] }: StageTimelineProps) 
       {/* Stage legend — Apple Watch style: dot + name + duration */}
       <View style={s.hypoLegend}>
         {(['awake', 'rem', 'snoozing', 'slumbering'] as SleepStage[])
-          .filter((st) => stageCounts[st] > 0)
           .map((st) => (
             <View key={st} style={s.hypoLegendRow}>
               <View style={[s.hypoLegendDot, { backgroundColor: STAGE_COLOR[st] }]} />
