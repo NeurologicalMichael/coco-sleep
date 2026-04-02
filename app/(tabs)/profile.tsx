@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { ScrollView, View, Text, Image, StyleSheet, Switch, TouchableOpacity, Alert, Modal, Animated, AppState, TextInput } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../../constants/supabase';
 import { redeemPromoCode } from '../../lib/promoCodes';
@@ -21,20 +22,18 @@ import { useCoachStore } from '../../store/coachStore';
 import { usePurchaseStore } from '../../store/purchaseStore';
 import { ProGate } from '../../components/ProGate';
 import { parseTimeHM } from '../../utils/timeHelpers';
+import { useUserProfileStore } from '../../store/userProfileStore';
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { tier, xp, streak, longestStreak, totalSessions } = useCocoStore();
+  const { tier } = useCocoStore();
   const { history } = useRecoveryStore();
   const { isPremium, isTrialing } = usePurchaseStore();
-  const { userId } = useAuthStore();
+  const { userId, username } = useAuthStore();
+  const { profilePictureUri, setProfile } = useUserProfileStore();
   const [promoCode, setPromoCode] = useState('');
   const [redeeming, setRedeeming] = useState(false);
   const currentTier = getTierForLevel(tier);
-  const sessionCount = Math.min(history.length, 7);
-  const avgScore = history.length > 0
-    ? Math.round(history.slice(0, 7).reduce((s, h) => s + h.recovery.recoveryScore, 0) / sessionCount)
-    : 0;
 
   const { settings, updateSettings, notificationsAuthorized, enableCoach, disableCoach } = useSleepCoach();
   const { screenTimeAuthorized, setScreenTimeAuthorized, selectedAppsCount, setSelectedAppsCount } = useCoachStore();
@@ -198,18 +197,22 @@ export default function ProfileScreen() {
     }
   }
 
-  const { debtHours } = useSleepDebtStore();
-  const debtDisplay = debtHours <= 0
-    ? `+${Math.abs(debtHours).toFixed(1)}h`
-    : `${debtHours.toFixed(1)}h`;
-
-  const stats = [
-    { label: 'STREAK', value: `${streak}` },
-    { label: 'BEST', value: `${longestStreak}` },
-    { label: 'SESSIONS', value: `${totalSessions}` },
-    { label: `${sessionCount}D AVG`, value: `${avgScore}` },
-    { label: 'SLEEP DEBT', value: debtDisplay },
-  ];
+  async function pickProfilePicture() {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission required', 'Allow photo library access to set a profile picture.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets[0]) {
+      setProfile({ profilePictureUri: result.assets[0].uri });
+    }
+  }
 
   return (
     <>
@@ -253,6 +256,25 @@ export default function ProfileScreen() {
     </Modal>
 
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      {/* Profile picture + username */}
+      <View style={styles.profileHeader}>
+        <TouchableOpacity onPress={pickProfilePicture} activeOpacity={0.8} style={styles.avatarWrap}>
+          {profilePictureUri ? (
+            <Image source={{ uri: profilePictureUri }} style={styles.avatar} />
+          ) : (
+            <View style={styles.avatarPlaceholder}>
+              <Text style={styles.avatarPlaceholderText}>
+                {username ? username[0].toUpperCase() : 'C'}
+              </Text>
+            </View>
+          )}
+          <View style={styles.avatarEditBadge}>
+            <Text style={styles.avatarEditText}>✎</Text>
+          </View>
+        </TouchableOpacity>
+        {username && <Text style={styles.profileUsername}>@{username}</Text>}
+      </View>
+
       {/* Tier card */}
       <View style={[styles.tierOuter, { borderColor: currentTier.color, borderLeftColor: currentTier.color }]}>
         <DiagonalStripes color={currentTier.color} opacity={0.06} />
@@ -284,29 +306,6 @@ export default function ProfileScreen() {
           </View>
         </TouchableOpacity>
       )}
-
-      {/* XP bar */}
-      <View style={styles.xpOuter}>
-        <View style={styles.xpInner}>
-          <View style={styles.xpRow}>
-            <Text style={styles.xpLabel}>XP PROGRESS</Text>
-            <Text style={styles.xpValue}>{xp % 100} / 100</Text>
-          </View>
-          <View style={styles.xpBarBg}>
-            <View style={[styles.xpBarFill, { width: `${xp % 100}%` as any, backgroundColor: currentTier.color }]} />
-          </View>
-        </View>
-      </View>
-
-      {/* Stats grid */}
-      <View style={styles.statsGrid}>
-        {stats.map((s) => (
-          <View key={s.label} style={styles.statCard}>
-            <Text style={styles.statValue}>{s.value}</Text>
-            <Text style={styles.statLabel}>{s.label}</Text>
-          </View>
-        ))}
-      </View>
 
       {/* Sleep Coach */}
       <View style={styles.coachOuter}>
@@ -725,6 +724,23 @@ const styles = StyleSheet.create({
 
   container: { flex: 1, backgroundColor: Colors.bgDeep },
   content: { padding: 24, paddingTop: 60, paddingBottom: 60 },
+
+  profileHeader: { alignItems: 'center', marginBottom: 24 },
+  avatarWrap: { position: 'relative', marginBottom: 10 },
+  avatar: { width: 88, height: 88, borderRadius: 44, borderWidth: 2, borderColor: Colors.red },
+  avatarPlaceholder: {
+    width: 88, height: 88, borderRadius: 44,
+    backgroundColor: Colors.bgCard, borderWidth: 2, borderColor: Colors.red,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  avatarPlaceholderText: { fontSize: 32, fontWeight: '900', fontStyle: 'italic', color: Colors.red },
+  avatarEditBadge: {
+    position: 'absolute', bottom: 0, right: 0,
+    width: 24, height: 24, borderRadius: 12,
+    backgroundColor: Colors.red, alignItems: 'center', justifyContent: 'center',
+  },
+  avatarEditText: { fontSize: 11, color: '#fff', fontWeight: '900' },
+  profileUsername: { fontSize: 14, fontWeight: '900', fontStyle: 'italic', color: Colors.textSecondary, letterSpacing: 1 },
 
   header: { marginBottom: 16 },
   eyebrow: { fontSize: 9, fontWeight: '900', fontStyle: 'italic', letterSpacing: 3, color: Colors.red, marginBottom: 4 },

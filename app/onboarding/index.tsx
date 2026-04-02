@@ -1,8 +1,9 @@
 import { useState, useRef, useMemo } from 'react';
 import {
-  Animated, View, Text, StyleSheet, TouchableOpacity,
+  Animated, View, Text, Image, StyleSheet, TouchableOpacity,
   Dimensions, TextInput, ActivityIndicator, ScrollView,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Notifications from 'expo-notifications';
 import { useRouter } from 'expo-router';
@@ -35,6 +36,7 @@ type Step =
   | 'goals'
   | 'league'
   | 'username'
+  | 'profile_picture'
   | 'schedule'
   | 'notifications'
   | 'screentime'
@@ -53,12 +55,13 @@ interface UserSetup {
   bedtime:            string;
   wakeTime:           string;
   username:           string;
+  profilePictureUri:  string | null;
 }
 
 const STEPS: Step[] = [
   'welcome', 'age', 'gender', 'workout_freq', 'workout_intensity',
-  'sleep_struggles', 'health', 'goals', 'league', 'username', 'schedule',
-  'notifications', 'screentime', 'widget', 'plan', 'done',
+  'sleep_struggles', 'health', 'goals', 'league', 'username', 'profile_picture',
+  'schedule', 'notifications', 'screentime', 'widget', 'plan', 'done',
 ];
 
 // ─── Option config ────────────────────────────────────────────────────────────
@@ -296,6 +299,7 @@ export default function OnboardingScreen() {
   const { updateSettings, setNotificationsAuthorized, setScreenTimeAuthorized, setSelectedAppsCount } = useCoachStore();
   const { signIn } = useAuthStore();
   const { setProfile: saveProfile } = useUserProfileStore();
+
   const { setTarget: setDebtTarget } = useSleepDebtStore();
 
   const [stepIdx, setStepIdx] = useState(0);
@@ -312,6 +316,7 @@ export default function OnboardingScreen() {
     bedtime:            '22:30',
     wakeTime:           '07:00',
     username:           '',
+    profilePictureUri:  null,
   });
 
   const [scheduleField, setScheduleField] = useState<'bedtime' | 'waketime'>('bedtime');
@@ -450,12 +455,13 @@ export default function OnboardingScreen() {
 
     // Persist profile + update sleep debt target
     saveProfile({
-      ageRange:         setup.ageRange,
-      gender:           setup.gender,
-      sleepStruggles:   setup.sleepStruggles,
-      healthConditions: setup.healthConditions,
-      goals:            setup.goals,
-      personalPlan:     plan,
+      ageRange:           setup.ageRange,
+      gender:             setup.gender,
+      sleepStruggles:     setup.sleepStruggles,
+      healthConditions:   setup.healthConditions,
+      goals:              setup.goals,
+      personalPlan:       plan,
+      profilePictureUri:  setup.profilePictureUri,
     });
     setDebtTarget(plan.sleepTarget);
 
@@ -827,6 +833,60 @@ export default function OnboardingScreen() {
       );
     }
 
+    // ── Profile picture ───────────────────────────────────────────────────────
+    if (step === 'profile_picture') {
+      async function pickImage() {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') return;
+        const result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ['images'],
+          allowsEditing: true,
+          aspect: [1, 1],
+          quality: 0.8,
+        });
+        if (!result.canceled && result.assets[0]) {
+          setSetup((p) => ({ ...p, profilePictureUri: result.assets[0].uri }));
+        }
+      }
+      return (
+        <>
+          <DiagonalHero color={Colors.bgCard} glyph="IMG" />
+          <ScrollView style={s.body} contentContainerStyle={s.bodyContent} showsVerticalScrollIndicator={false}>
+            <DotIndicator total={STEPS.length} current={stepIdx} />
+            <Text style={s.eyebrow}>// YOUR PROFILE</Text>
+            <Text style={s.title}>ADD A{'\n'}PHOTO.</Text>
+            <View style={s.bar} />
+            <Text style={s.subtitle}>Optional — shows on your profile screen.</Text>
+
+            <TouchableOpacity onPress={pickImage} activeOpacity={0.8} style={s.avatarPickerWrap}>
+              {setup.profilePictureUri ? (
+                <Image source={{ uri: setup.profilePictureUri }} style={s.avatarPreview} />
+              ) : (
+                <View style={s.avatarPlaceholder}>
+                  <Text style={s.avatarPlaceholderText}>
+                    {setup.username ? setup.username[0].toUpperCase() : 'C'}
+                  </Text>
+                </View>
+              )}
+              <View style={s.avatarEditBadge}>
+                <Text style={s.avatarEditText}>{setup.profilePictureUri ? '✎' : '+'}</Text>
+              </View>
+            </TouchableOpacity>
+
+            {setup.profilePictureUri && (
+              <TouchableOpacity onPress={() => setSetup((p) => ({ ...p, profilePictureUri: null }))} style={{ alignSelf: 'center', marginTop: 12 }}>
+                <Text style={{ fontSize: 10, fontWeight: '900', fontStyle: 'italic', color: Colors.textMuted, letterSpacing: 1 }}>REMOVE PHOTO</Text>
+              </TouchableOpacity>
+            )}
+          </ScrollView>
+          <View style={s.footer}>
+            <P5Btn label="NEXT →" onPress={next} />
+            <P5Btn label="SKIP" onPress={next} secondary />
+          </View>
+        </>
+      );
+    }
+
     // ── Schedule ──────────────────────────────────────────────────────────────
     if (step === 'schedule') {
       const isBedtime = scheduleField === 'bedtime';
@@ -1153,6 +1213,22 @@ const s = StyleSheet.create({
   statusText: { fontSize: 9, fontWeight: '900', letterSpacing: 2 },
   charCount: { fontSize: 9, color: Colors.textMuted, fontWeight: '700' },
   inputHint: { fontSize: 10, color: Colors.textMuted, marginTop: 4, fontStyle: 'italic' },
+
+  // Profile picture step
+  avatarPickerWrap: { alignSelf: 'center', position: 'relative', marginTop: 24, marginBottom: 8 },
+  avatarPreview: { width: 110, height: 110, borderRadius: 55, borderWidth: 2, borderColor: Colors.red },
+  avatarPlaceholder: {
+    width: 110, height: 110, borderRadius: 55,
+    backgroundColor: Colors.bgCard, borderWidth: 2, borderColor: Colors.red,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  avatarPlaceholderText: { fontSize: 40, fontWeight: '900', fontStyle: 'italic', color: Colors.red },
+  avatarEditBadge: {
+    position: 'absolute', bottom: 4, right: 4,
+    width: 28, height: 28, borderRadius: 14,
+    backgroundColor: Colors.red, alignItems: 'center', justifyContent: 'center',
+  },
+  avatarEditText: { fontSize: 14, color: '#fff', fontWeight: '900' },
 
   // Schedule step
   scheduleToggle: { flexDirection: 'row', gap: 10, marginBottom: 8 },

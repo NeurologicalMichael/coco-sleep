@@ -39,6 +39,7 @@ interface UserProfileStore {
   personalPlan:             PersonalPlan | null;
   fitnessLevel:             FitnessLevel | null;
   healthKitPermissionAsked: boolean;
+  profilePictureUri:        string | null;
 
   setProfile: (patch: Partial<Omit<UserProfileStore, 'setProfile'>>) => void;
 }
@@ -54,6 +55,7 @@ export const useUserProfileStore = create<UserProfileStore>()(
       personalPlan:             null,
       fitnessLevel:             null,
       healthKitPermissionAsked: false,
+      profilePictureUri:        null,
 
       setProfile: (patch) => set((state) => ({ ...state, ...patch })),
     }),

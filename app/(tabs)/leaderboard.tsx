@@ -702,7 +702,7 @@ export default function LeaderboardScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bgDeep },
-  content: { paddingBottom: 60 },
+  content: { paddingBottom: 60, paddingTop: 60 },
 
   header: { paddingHorizontal: 24, paddingTop: 60, marginBottom: 20 },
   eyebrow: { fontSize: 9, fontWeight: '900', fontStyle: 'italic', letterSpacing: 3, color: Colors.red, marginBottom: 4 },
