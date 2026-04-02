@@ -56,16 +56,17 @@ function Bubble({ msg }: { msg: ChatMessage }) {
 
 function SuggestedBubble({ text, onPress, disabled }: { text: string; onPress: () => void; disabled: boolean }) {
   return (
-    <TouchableOpacity
-      style={bs.suggRow}
-      onPress={onPress}
-      disabled={disabled}
-      activeOpacity={0.7}
-    >
-      <View style={bs.suggBubble}>
+    <View style={bs.suggRow}>
+      <TouchableOpacity
+        style={bs.suggBubble}
+        onPress={onPress}
+        disabled={disabled}
+        activeOpacity={0.7}
+        hitSlop={{ top: 0, bottom: 0, left: 0, right: 0 }}
+      >
         <Text style={bs.suggText}>{text}</Text>
-      </View>
-    </TouchableOpacity>
+      </TouchableOpacity>
+    </View>
   );
 }
 
@@ -174,7 +175,7 @@ export default function CocoAIScreen() {
     <KeyboardAvoidingView
       style={s.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={83}
+      keyboardVerticalOffset={0}
     >
       <ScrollView
         ref={scrollRef}
