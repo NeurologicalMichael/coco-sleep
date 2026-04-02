@@ -14,7 +14,7 @@ import { useRouter } from 'expo-router';
 import { Colors } from '../../constants/colors';
 import { DiagonalStripes } from '../../components/DiagonalStripes';
 import { usePurchaseStore } from '../../store/purchaseStore';
-import { sendCocoMessage, ChatMessage, AI_CONFIGURED } from '../../lib/cocoAI';
+import { sendCocoMessage, ChatMessage } from '../../lib/cocoAI';
 
 // ─── Question bank ────────────────────────────────────────────────────────────
 
@@ -157,6 +157,19 @@ export default function CocoAIScreen() {
 
   const isEmpty = messages.length === 0;
 
+  const suggestions = !loading && (
+    <View style={s.suggSection}>
+      {chips.map((q, i) => (
+        <SuggestedBubble
+          key={`${i}-${q.slice(0, 8)}`}
+          text={q}
+          onPress={() => send(q)}
+          disabled={loading}
+        />
+      ))}
+    </View>
+  );
+
   return (
     <KeyboardAvoidingView
       style={s.container}
@@ -166,53 +179,41 @@ export default function CocoAIScreen() {
       <ScrollView
         ref={scrollRef}
         style={s.scroll}
-        contentContainerStyle={[s.scrollContent, isEmpty && s.scrollEmpty]}
+        contentContainerStyle={s.scrollContent}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
         {isEmpty ? (
-          <View style={s.emptyState}>
-            <View style={s.logoMark}>
-              <Text style={s.logoC}>C</Text>
+          // Empty state: header centered in top half, suggestions anchored at bottom
+          <View style={s.emptyLayout}>
+            <View style={s.emptyHeader}>
+              <View style={s.logoMark}>
+                <Text style={s.logoC}>C</Text>
+              </View>
+              <Text style={s.emptyTitle}>COCO AI</Text>
+              <Text style={s.emptySub}>Your personal sleep coach.{'\n'}Ask me anything about your sleep.</Text>
             </View>
-            <Text style={s.emptyTitle}>COCO AI</Text>
-            <Text style={s.emptySub}>Your personal sleep coach.{'\n'}Ask me anything about your sleep.</Text>
+            {suggestions}
           </View>
         ) : (
-          messages.map((m, i) => <Bubble key={i} msg={m} />)
-        )}
+          <>
+            {messages.map((m, i) => <Bubble key={i} msg={m} />)}
 
-        {loading && (
-          <View style={[bs.row, { paddingHorizontal: 16 }]}>
-            <View style={bs.avatar}>
-              <Text style={bs.avatarText}>C</Text>
-            </View>
-            <View style={[bs.bubble, bs.bubbleCoco, s.typingBubble]}>
-              <ActivityIndicator size="small" color={Colors.red} />
-            </View>
-          </View>
-        )}
+            {loading && (
+              <View style={bs.row}>
+                <View style={bs.avatar}>
+                  <Text style={bs.avatarText}>C</Text>
+                </View>
+                <View style={[bs.bubble, bs.bubbleCoco, s.typingBubble]}>
+                  <ActivityIndicator size="small" color={Colors.red} />
+                </View>
+              </View>
+            )}
 
-        {error && <Text style={s.errorText}>{error}</Text>}
+            {error && <Text style={s.errorText}>{error}</Text>}
 
-        {!AI_CONFIGURED && isEmpty && (
-          <View style={s.warningBanner}>
-            <Text style={s.warningText}>⚠  API key not configured — add it in lib/cocoAI.ts</Text>
-          </View>
-        )}
-
-        {/* Suggested questions as chat-style bubbles */}
-        {!loading && (
-          <View style={s.suggSection}>
-            {chips.map((q, i) => (
-              <SuggestedBubble
-                key={`${i}-${q.slice(0, 8)}`}
-                text={q}
-                onPress={() => send(q)}
-                disabled={loading}
-              />
-            ))}
-          </View>
+            {suggestions}
+          </>
         )}
       </ScrollView>
 
@@ -246,10 +247,11 @@ export default function CocoAIScreen() {
 const s = StyleSheet.create({
   container:    { flex: 1, backgroundColor: Colors.bgDeep },
   scroll:       { flex: 1 },
-  scrollContent: { paddingTop: 60, paddingBottom: 16 },
-  scrollEmpty:  { flex: 1, justifyContent: 'center' },
+  scrollContent: { flexGrow: 1, paddingTop: 60, paddingBottom: 12 },
 
-  emptyState: { alignItems: 'center', paddingHorizontal: 32, paddingBottom: 40 },
+  // Empty state: fills full scroll area, header centered, suggestions at bottom
+  emptyLayout: { flex: 1, justifyContent: 'space-between' },
+  emptyHeader: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, paddingBottom: 24 },
   logoMark:   {
     width: 64, height: 64, backgroundColor: Colors.red,
     alignItems: 'center', justifyContent: 'center', marginBottom: 20,
@@ -260,13 +262,6 @@ const s = StyleSheet.create({
 
   typingBubble: { paddingVertical: 10, paddingHorizontal: 16 },
   errorText:    { fontSize: 11, color: Colors.red, textAlign: 'center', marginTop: 8, paddingHorizontal: 24 },
-
-  warningBanner: {
-    marginHorizontal: 16, marginTop: 16, padding: 12,
-    borderWidth: 1, borderColor: Colors.warning, borderLeftWidth: 3, borderLeftColor: Colors.warning,
-    backgroundColor: Colors.warning + '11',
-  },
-  warningText: { fontSize: 11, color: Colors.warning, fontWeight: '700' },
 
   suggSection: { paddingTop: 8, paddingBottom: 4 },
 
