@@ -54,6 +54,21 @@ function Bubble({ msg }: { msg: ChatMessage }) {
   );
 }
 
+function SuggestedBubble({ text, onPress, disabled }: { text: string; onPress: () => void; disabled: boolean }) {
+  return (
+    <TouchableOpacity
+      style={bs.suggRow}
+      onPress={onPress}
+      disabled={disabled}
+      activeOpacity={0.7}
+    >
+      <View style={bs.suggBubble}>
+        <Text style={bs.suggText}>{text}</Text>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
 const bs = StyleSheet.create({
   row:        { flexDirection: 'row', marginBottom: 14, alignItems: 'flex-end', gap: 8, paddingHorizontal: 16 },
   rowUser:    { flexDirection: 'row-reverse' },
@@ -64,6 +79,16 @@ const bs = StyleSheet.create({
   bubbleUser: { backgroundColor: Colors.red + '22', borderColor: Colors.red + '55' },
   text:       { fontSize: 13, color: Colors.textSecondary, lineHeight: 20 },
   textUser:   { color: Colors.textPrimary },
+
+  // Suggested question bubbles (outlined, right-aligned)
+  suggRow:    { flexDirection: 'row-reverse', paddingHorizontal: 16, marginBottom: 8 },
+  suggBubble: {
+    maxWidth: '80%', padding: 12,
+    borderWidth: 1.5, borderColor: Colors.red + '66',
+    borderLeftWidth: 1.5,
+    backgroundColor: 'transparent',
+  },
+  suggText:   { fontSize: 12, color: Colors.red + 'cc', fontStyle: 'italic', lineHeight: 18 },
 });
 
 // ─── Main screen ──────────────────────────────────────────────────────────────
@@ -136,7 +161,7 @@ export default function CocoAIScreen() {
     <KeyboardAvoidingView
       style={s.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={90}
+      keyboardVerticalOffset={83}
     >
       <ScrollView
         ref={scrollRef}
@@ -175,24 +200,23 @@ export default function CocoAIScreen() {
             <Text style={s.warningText}>⚠  API key not configured — add it in lib/cocoAI.ts</Text>
           </View>
         )}
+
+        {/* Suggested questions as chat-style bubbles */}
+        {!loading && (
+          <View style={s.suggSection}>
+            {chips.map((q, i) => (
+              <SuggestedBubble
+                key={`${i}-${q.slice(0, 8)}`}
+                text={q}
+                onPress={() => send(q)}
+                disabled={loading}
+              />
+            ))}
+          </View>
+        )}
       </ScrollView>
 
-      {/* Suggested question chips */}
-      <View style={s.chips}>
-        {chips.map((q, i) => (
-          <TouchableOpacity
-            key={`${i}-${q.slice(0, 8)}`}
-            style={s.chip}
-            onPress={() => send(q)}
-            activeOpacity={0.7}
-            disabled={loading}
-          >
-            <Text style={s.chipText} numberOfLines={2}>{q}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      {/* Input */}
+      {/* Input — directly above keyboard */}
       <View style={s.inputBar}>
         <TextInput
           style={s.input}
@@ -244,19 +268,7 @@ const s = StyleSheet.create({
   },
   warningText: { fontSize: 11, color: Colors.warning, fontWeight: '700' },
 
-  chips: {
-    flexDirection: 'row', gap: 8, paddingHorizontal: 12, paddingVertical: 8,
-    borderTopWidth: 1, borderTopColor: Colors.border,
-  },
-  chip: {
-    flex: 1, backgroundColor: '#111', borderWidth: 1, borderColor: Colors.border,
-    borderLeftWidth: 2, borderLeftColor: Colors.red,
-    paddingHorizontal: 8, paddingVertical: 7,
-  },
-  chipText: {
-    fontSize: 9, fontWeight: '700', fontStyle: 'italic',
-    color: Colors.textMuted, letterSpacing: 0.3, lineHeight: 13,
-  },
+  suggSection: { paddingTop: 8, paddingBottom: 4 },
 
   inputBar: {
     flexDirection: 'row', alignItems: 'flex-end', gap: 8,
