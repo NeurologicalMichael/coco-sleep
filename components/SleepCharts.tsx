@@ -25,7 +25,7 @@ const STAGE_COLOR: Record<SleepStage, string> = {
 
 const STAGE_LABEL: Record<SleepStage, string> = {
   awake:      'AWAKE',
-  dozing:     'N1',
+  dozing:     'LIGHT',
   rem:        'REM',
   snoozing:   'CORE',
   slumbering: 'DEEP',
@@ -146,9 +146,9 @@ export function StageTimeline({ events, audioEvents = [] }: StageTimelineProps) 
         <Text style={s.timeLabel}>{fmtTime(endTs)}</Text>
       </View>
 
-      {/* Stage legend — Apple Watch style: dot + name + duration */}
+      {/* Stage legend — dot + name + duration */}
       <View style={s.hypoLegend}>
-        {(['awake', 'rem', 'snoozing', 'slumbering'] as SleepStage[])
+        {(['awake', 'dozing', 'rem', 'snoozing', 'slumbering'] as SleepStage[])
           .map((st) => (
             <View key={st} style={s.hypoLegendRow}>
               <View style={[s.hypoLegendDot, { backgroundColor: STAGE_COLOR[st] }]} />
@@ -178,6 +178,32 @@ export function StageTimeline({ events, audioEvents = [] }: StageTimelineProps) 
 
 // ─── Movement Intensity Graph ─────────────────────────────────────────────────
 
+// Three categorical intensity levels
+const MOV_STILL  = '#2A3441';   // dark muted — no movement
+const MOV_MED    = Colors.gold; // gold — moderate movement
+const MOV_HEAVY  = Colors.red;  // red  — heavy movement
+
+type MovLevel = 'still' | 'movement' | 'heavy';
+
+const MOV_LABEL: Record<MovLevel, string> = {
+  still:    'STILL',
+  movement: 'MOVEMENT',
+  heavy:    'HEAVY',
+};
+
+const MOV_COLOR: Record<MovLevel, string> = {
+  still:    MOV_STILL,
+  movement: MOV_MED,
+  heavy:    MOV_HEAVY,
+};
+
+function movLevel(magnitude: number, scale: number): MovLevel {
+  const ratio = magnitude / scale;
+  if (ratio < 0.1)  return 'still';
+  if (ratio < 0.5)  return 'movement';
+  return 'heavy';
+}
+
 interface MovementGraphProps {
   events: MovementEvent[];
 }
@@ -185,33 +211,54 @@ interface MovementGraphProps {
 export function MovementGraph({ events }: MovementGraphProps) {
   if (events.length === 0) return null;
 
-  const GRAPH_H  = 72;
-  // Use 99th-percentile instead of max to avoid one spike dominating the scale
-  const sorted   = [...events.map((e) => e.magnitude)].sort((a, b) => a - b);
-  const p99      = sorted[Math.floor(sorted.length * 0.99)] ?? sorted[sorted.length - 1] ?? 0.01;
-  const scale    = Math.max(p99, 0.01);
+  const GRAPH_H = 72;
+  const EPOCH_MS = 30_000;
+  const startTs  = events[0].timestamp - EPOCH_MS;
+  const endTs    = events[events.length - 1].timestamp;
+
+  // Use 99th-percentile to avoid one spike dominating the scale
+  const sorted = [...events.map((e) => e.magnitude)].sort((a, b) => a - b);
+  const p99    = sorted[Math.floor(sorted.length * 0.99)] ?? sorted[sorted.length - 1] ?? 0.01;
+  const scale  = Math.max(p99, 0.01);
+
+  // Count epochs per level for legend
+  const levelCounts: Record<MovLevel, number> = { still: 0, movement: 0, heavy: 0 };
+  for (const e of events) levelCounts[movLevel(e.magnitude, scale)]++;
 
   return (
     <View style={s.card}>
       <Text style={s.cardTitle}>// MOVEMENT INTENSITY</Text>
 
+      {/* Bar chart */}
       <View style={[s.graphTrack, { height: GRAPH_H }]}>
         {events.map((e, i) => {
-          const stage  = (e.stage ?? 'dozing') as SleepStage;
+          const level  = movLevel(e.magnitude, scale);
           const height = Math.max(2, Math.round((Math.min(e.magnitude, scale) / scale) * GRAPH_H));
           return (
             <View
               key={i}
-              style={[s.graphBar, { height, backgroundColor: STAGE_COLOR[stage] }]}
+              style={[s.graphBar, { height, backgroundColor: MOV_COLOR[level] }]}
             />
           );
         })}
       </View>
 
-      <View style={s.graphAxis}>
-        <Text style={s.graphAxisLabel}>STILL</Text>
-        <Text style={s.graphAxisLabel}>MOVEMENT</Text>
-        <Text style={s.graphAxisLabel}>ACTIVE</Text>
+      {/* Time axis */}
+      <View style={s.timeRow}>
+        <Text style={s.timeLabel}>{fmtTime(startTs)}</Text>
+        <Text style={s.timeLabel}>{fmtTime(startTs + (endTs - startTs) * 0.5)}</Text>
+        <Text style={s.timeLabel}>{fmtTime(endTs)}</Text>
+      </View>
+
+      {/* Legend */}
+      <View style={s.hypoLegend}>
+        {(['still', 'movement', 'heavy'] as MovLevel[]).map((lvl) => (
+          <View key={lvl} style={s.hypoLegendRow}>
+            <View style={[s.hypoLegendDot, { backgroundColor: MOV_COLOR[lvl] }]} />
+            <Text style={s.hypoLegendName}>{MOV_LABEL[lvl]}</Text>
+            <Text style={s.hypoLegendDur}>{fmtDur(levelCounts[lvl])}</Text>
+          </View>
+        ))}
       </View>
     </View>
   );
