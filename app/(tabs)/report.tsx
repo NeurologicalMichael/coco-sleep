@@ -341,23 +341,32 @@ function NightPanel({ session, isPremium }: { session: ProcessedSession; isPremi
         <View style={[npSt.scoreBarFill, { width: `${score}%` as any, backgroundColor: color }]} />
       </View>
 
-      {/* Stats grid */}
-      <View style={npSt.statsGrid}>
-        {[
-          { label: 'DURATION',    value: `${durationHours.toFixed(1)}h` },
-          { label: 'EFFICIENCY',  value: `${scores.sleepEfficiency}%` },
-          { label: 'HRV PROXY',   value: `${Math.round(recovery.hrvProxy)}` },
-          { label: 'LATENCY',     value: scores.sleepLatencyMinutes > 0 ? `${scores.sleepLatencyMinutes}M` : '—' },
-          { label: 'WASO',        value: scores.wasoMinutes > 0 ? `${scores.wasoMinutes}M` : '—' },
-          { label: session.watchHeartRate ? 'AVG HR' : 'DISRUPTIONS',
-            value: session.watchHeartRate ? `${session.watchHeartRate}` : `${(scores as any).disruptionCount ?? 0}` },
-        ].map((s) => (
-          <View key={s.label} style={npSt.stat}>
-            <Text style={npSt.statNum}>{s.value}</Text>
-            <Text style={npSt.statLabel}>{s.label}</Text>
+      {/* Stats grid — 3 rows × 2 columns */}
+      {(() => {
+        const sleepOnsetTs = startedAt + scores.sleepLatencyMinutes * 60_000;
+        const metrics = [
+          { label: 'DURATION',            value: `${durationHours.toFixed(1)}h` },
+          { label: 'EFFICIENCY',          value: `${scores.sleepEfficiency}%` },
+          { label: 'HRV PROXY',           value: `${Math.round(recovery.hrvProxy)}` },
+          { label: 'TIME TO FALL ASLEEP', value: scores.sleepLatencyMinutes > 0 ? `${scores.sleepLatencyMinutes}M` : '—' },
+          { label: 'SLEEP TIME',          value: formatClockTime(sleepOnsetTs) },
+          { label: 'WAKE TIME',           value: formatClockTime(endedAt) },
+        ];
+        return (
+          <View style={npSt.statsGrid}>
+            {[metrics.slice(0, 2), metrics.slice(2, 4), metrics.slice(4, 6)].map((row, ri) => (
+              <View key={ri} style={npSt.statRow}>
+                {row.map((s) => (
+                  <View key={s.label} style={npSt.stat}>
+                    <Text style={npSt.statNum}>{s.value}</Text>
+                    <Text style={npSt.statLabel}>{s.label}</Text>
+                  </View>
+                ))}
+              </View>
+            ))}
           </View>
-        ))}
-      </View>
+        );
+      })()}
 
       {/* Insights toggle */}
       <TouchableOpacity style={npSt.seeMoreBtn} onPress={() => setShowInsights((v) => !v)} activeOpacity={0.7}>
@@ -447,10 +456,11 @@ const npSt = StyleSheet.create({
   gradeScore: { fontSize: 42, fontWeight: '900', fontStyle: 'italic' },
   scoreBarTrack: { height: 4, backgroundColor: Colors.border, marginBottom: 12, overflow: 'hidden' },
   scoreBarFill: { height: '100%' },
-  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 14, gap: 1, backgroundColor: Colors.border },
-  stat: { width: '33.33%', backgroundColor: Colors.bgCard, padding: 12, alignItems: 'center' },
+  statsGrid: { marginBottom: 14, gap: 1, backgroundColor: Colors.border },
+  statRow: { flexDirection: 'row', gap: 1 },
+  stat: { flex: 1, backgroundColor: Colors.bgCard, paddingVertical: 14, paddingHorizontal: 8, alignItems: 'center' },
   statNum: { fontSize: 15, fontWeight: '900', fontStyle: 'italic', color: Colors.textPrimary },
-  statLabel: { fontSize: 7, fontWeight: '900', letterSpacing: 1.5, color: Colors.textMuted, marginTop: 3 },
+  statLabel: { fontSize: 7, fontWeight: '900', letterSpacing: 1.5, color: Colors.textMuted, marginTop: 3, textAlign: 'center' },
   seeMoreBtn: { borderWidth: 1, borderColor: Colors.border, paddingVertical: 12, alignItems: 'center', marginBottom: 14, borderLeftWidth: 3, borderLeftColor: Colors.red },
   seeMoreText: { fontSize: 10, fontWeight: '900', fontStyle: 'italic', letterSpacing: 3, color: Colors.textSecondary },
   insightOuter: { backgroundColor: Colors.bgCard, borderWidth: 1, borderColor: Colors.border, borderLeftWidth: 4, marginBottom: 10 },
