@@ -271,6 +271,9 @@ export default function LeaderboardScreen() {
     const recent = history.filter((s) => new Date(s.date).getTime() >= sevenDaysAgo);
     if (recent.length === 0) return null;
     const scores = recent.map((s) => s.recovery.recoveryScore);
+    const avgDurationMins = Math.round(recent.reduce((a, s) => a + s.durationHours * 60, 0) / recent.length);
+    // Total hours across ALL history (not just 7d) — matches user's "total accumulated sleep"
+    const totalHours = parseFloat(history.reduce((a, s) => a + s.durationHours, 0).toFixed(1));
     return {
       userId,
       username: username || 'You',
@@ -279,6 +282,13 @@ export default function LeaderboardScreen() {
       streak,
       nights: recent.length,
       tierEmoji: tierEmojiFromStreak(streak),
+      leagueStats: {
+        avgDurationMins,
+        totalHours,
+        avgQuality: Math.round(scores.reduce((a, b) => a + b, 0) / scores.length),
+        avgHrv: null,
+        sharingEnabled: true,
+      },
     };
   }
 

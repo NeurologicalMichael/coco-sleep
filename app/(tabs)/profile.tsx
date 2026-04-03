@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { ScrollView, View, Text, Image, StyleSheet, Switch, TouchableOpacity, Alert, Modal, Animated, AppState, TextInput } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../../constants/supabase';
 import { redeemPromoCode } from '../../lib/promoCodes';
@@ -210,7 +211,15 @@ export default function ProfileScreen() {
       quality: 0.8,
     });
     if (!result.canceled && result.assets[0]) {
-      setProfile({ profilePictureUri: result.assets[0].uri });
+      try {
+        // Copy to Documents so it survives iOS cache eviction (~12h cache TTL)
+        const dest = `${FileSystem.documentDirectory}profile_picture.jpg`;
+        await FileSystem.copyAsync({ from: result.assets[0].uri, to: dest });
+        setProfile({ profilePictureUri: dest });
+      } catch {
+        // Fallback: store original uri if copy fails
+        setProfile({ profilePictureUri: result.assets[0].uri });
+      }
     }
   }
 

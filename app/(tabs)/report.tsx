@@ -347,10 +347,10 @@ function NightPanel({ session, isPremium }: { session: ProcessedSession; isPremi
           { label: 'DURATION',    value: `${durationHours.toFixed(1)}h` },
           { label: 'EFFICIENCY',  value: `${scores.sleepEfficiency}%` },
           { label: 'HRV PROXY',   value: `${Math.round(recovery.hrvProxy)}` },
-          { label: 'WENT TO BED', value: formatClockTime(startedAt) },
-          { label: 'WOKE UP',     value: formatClockTime(endedAt) },
+          { label: 'LATENCY',     value: scores.sleepLatencyMinutes > 0 ? `${scores.sleepLatencyMinutes}M` : '—' },
+          { label: 'WASO',        value: scores.wasoMinutes > 0 ? `${scores.wasoMinutes}M` : '—' },
           { label: session.watchHeartRate ? 'AVG HR' : 'DISRUPTIONS',
-            value: session.watchHeartRate ? `${session.watchHeartRate}` : `${scores.disruptionCount ?? 0}` },
+            value: session.watchHeartRate ? `${session.watchHeartRate}` : `${(scores as any).disruptionCount ?? 0}` },
         ].map((s) => (
           <View key={s.label} style={npSt.stat}>
             <Text style={npSt.statNum}>{s.value}</Text>

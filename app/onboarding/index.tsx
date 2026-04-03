@@ -4,6 +4,7 @@ import {
   Dimensions, TextInput, ActivityIndicator, ScrollView,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Notifications from 'expo-notifications';
 import { useRouter } from 'expo-router';
@@ -845,7 +846,13 @@ export default function OnboardingScreen() {
           quality: 0.8,
         });
         if (!result.canceled && result.assets[0]) {
-          setSetup((p) => ({ ...p, profilePictureUri: result.assets[0].uri }));
+          try {
+            const dest = `${FileSystem.documentDirectory}profile_picture.jpg`;
+            await FileSystem.copyAsync({ from: result.assets[0].uri, to: dest });
+            setSetup((p) => ({ ...p, profilePictureUri: dest }));
+          } catch {
+            setSetup((p) => ({ ...p, profilePictureUri: result.assets[0].uri }));
+          }
         }
       }
       return (
