@@ -461,23 +461,6 @@ export default function HomeScreen() {
   // Exact asset name sent to widget so it always matches the app hero
   const growthImageName = `growth_${cocoGrowth.stage}_${cocoSubIdx + 1}`;
 
-  // Reactively sync widget whenever level, streak, or XP changes (e.g. after session ends)
-  // This ensures the widget always reflects the latest values, even if handleStop captured stale ones
-  useEffect(() => {
-    void syncWidgetState({
-      recoveryScore: latestSession?.recovery.recoveryScore ?? null,
-      streak,
-      tierName: getTierForLevel(tier).name,
-      mood,
-      isTracking,
-      bedtimeTime: coachSettings.bedtimeReminderTime,
-      wakeTime: coachSettings.wakeTime,
-      cocoLevel: latestSession ? scoreToCocoLevel(latestSession.recovery.recoveryScore) : 'normal',
-      cocoLevelNum: cocoLevel,
-      growthImageName,
-    });
-  }, [cocoLevel, streak, cocoXP, growthImageName]);
-
   const watchConnected = watchStatus === 'authorized';
   const totalNights  = history.length;
   const avgRecovery  = totalNights > 0
