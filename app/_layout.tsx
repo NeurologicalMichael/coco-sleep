@@ -124,6 +124,7 @@ export default function RootLayout() {
       bedtimeTime,
       wakeTime,
       cocoLevel: latestSession ? scoreToCocoLevel(latestSession.recovery.recoveryScore) : 'normal',
+      cocoLevelNum: useCocoStore.getState().cocoLevel,
     });
   }, [bedtimeTime, wakeTime, isTracking]);
 

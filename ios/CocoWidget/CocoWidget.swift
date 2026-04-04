@@ -11,6 +11,7 @@ struct CocoEntry: TimelineEntry {
     let tierName: String
     let isTracking: Bool
     let cocoLevel: String  // "bad" | "normal" | "leather" | "gold" | "diamond"
+    let cocoLevelNum: Int  // numeric level from store (1, 2, 3 …)
 }
 
 // react-native-shared-group-preferences stores values as JSON strings
@@ -26,25 +27,25 @@ private func readDefaults() -> CocoEntry {
         ud?.string(forKey: key) ?? ""
     }
 
+    let levelNum = intVal("cocoLevelNum")
     return CocoEntry(
         date: Date(),
         recoveryScore: intVal("recoveryScore"),
         streak: intVal("streak"),
         tierName: strVal("tierName"),
         isTracking: intVal("isTracking") == 1,
-        cocoLevel: strVal("cocoLevel").isEmpty ? "normal" : strVal("cocoLevel")
+        cocoLevel: strVal("cocoLevel").isEmpty ? "normal" : strVal("cocoLevel"),
+        cocoLevelNum: levelNum > 0 ? levelNum : 1
     )
 }
 
-// Returns the coco image name for the given level
-private func cocoImageName(_ level: String) -> String {
-    switch level {
-    case "bad":     return "coco_bad"
-    case "leather": return "coco_leather"
-    case "gold":    return "coco_gold"
-    case "diamond": return "coco_diamond"
-    default:        return "coco_normal"
-    }
+// Returns the growth stage PNG name based on streak
+private func growthImageName(_ streak: Int) -> String {
+    if streak >= 21 { return "growth_legendary_3" }
+    if streak >= 11 { return "growth_mature_3" }
+    if streak >= 6  { return "growth_growing_3" }
+    if streak >= 3  { return "growth_baby_3" }
+    return "growth_seed_3"
 }
 
 // Streak color: white at 0 days, fully gold (#F5C842) at 14+ days
@@ -58,19 +59,19 @@ private func streakColor(_ streak: Int) -> Color {
     )
 }
 
-// Load a loose PNG from the widget extension bundle
-private func cocoImage(_ level: String) -> Image {
-    let name = cocoImageName(level)
+// Load growth stage PNG from the widget extension bundle
+private func growthImage(_ streak: Int) -> Image {
+    let name = growthImageName(streak)
     if let ui = UIImage(named: name) {
         return Image(uiImage: ui)
     }
-    return Image(systemName: "moon.fill")
+    return Image(systemName: "leaf.fill")
 }
 
 // MARK: - Provider
 struct CocoProvider: TimelineProvider {
     func placeholder(in context: Context) -> CocoEntry {
-        CocoEntry(date: Date(), recoveryScore: 82, streak: 7, tierName: "Coconut", isTracking: false, cocoLevel: "gold")
+        CocoEntry(date: Date(), recoveryScore: 82, streak: 11, tierName: "Coconut", isTracking: false, cocoLevel: "gold", cocoLevelNum: 2)
     }
 
     func getSnapshot(in context: Context, completion: @escaping (CocoEntry) -> Void) {
@@ -184,88 +185,58 @@ struct CocoMediumView: View {
                 Spacer()
             }
 
-            if entry.isTracking {
-                HStack(spacing: 0) {
-                    // Left: coco image (same as idle)
-                    cocoImage(entry.cocoLevel)
+            HStack(spacing: 0) {
+                // Left: growth stage image + Level label
+                VStack(spacing: 4) {
+                    growthImage(entry.streak)
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 76, height: 76)
-                        .padding(.leading, 16)
-                        .padding(.trailing, 14)
+                        .frame(width: 108, height: 108)
+                    Text("LEVEL \(entry.cocoLevelNum)")
+                        .font(.system(size: 19, weight: .black))
+                        .italic()
+                        .foregroundColor(Color(red: 0.96, green: 0.78, blue: 0.26))  // gold
+                        .tracking(1)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.leading, 14)
+                .padding(.trailing, 8)
 
-                    Rectangle()
-                        .fill(cocoRed)
-                        .frame(width: 3)
-                        .padding(.vertical, 14)
+                // Red vertical divider
+                Rectangle()
+                    .fill(cocoRed)
+                    .frame(width: 3)
+                    .padding(.vertical, 14)
 
-                    // Right: WAKE UP button only
-                    VStack(alignment: .center, spacing: 6) {
-                        Text("// COCO RECOVERY")
-                            .font(.system(size: 9, weight: .black))
+                // Right: streak at top, button below
+                VStack(alignment: .center, spacing: 10) {
+                    VStack(spacing: 2) {
+                        Text("\(entry.streak)")
+                            .font(.system(size: 36, weight: .black))
                             .italic()
-                            .foregroundColor(cocoRed)
+                            .foregroundColor(streakColor(entry.streak))
+                        Text("DAY STREAK")
+                            .font(.system(size: 8, weight: .black))
+                            .italic()
+                            .foregroundColor(.white.opacity(0.35))
                             .tracking(2)
-                        Link(destination: URL(string: "coco-sleep://begin-sleep")!) {
-                            Text("WAKE UP →")
-                                .font(.system(size: 13, weight: .black))
-                                .italic()
-                                .foregroundColor(.white)
-                                .tracking(1)
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 10)
-                                .background(cocoRed)
-                        }
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(.trailing, 14)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                HStack(spacing: 0) {
-                    // Left: coco image
-                    cocoImage(entry.cocoLevel)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 76, height: 76)
-                        .padding(.leading, 16)
-                        .padding(.trailing, 14)
-
-                    // Red vertical divider
-                    Rectangle()
-                        .fill(cocoRed)
-                        .frame(width: 3)
-                        .padding(.vertical, 14)
-
-                    // Right: streak + BEGIN SLEEP centered
-                    VStack(alignment: .center, spacing: 10) {
-                        VStack(spacing: 2) {
-                            Text("\(entry.streak)")
-                                .font(.system(size: 40, weight: .black))
-                                .italic()
-                                .foregroundColor(streakColor(entry.streak))
-                            Text("DAY STREAK")
-                                .font(.system(size: 8, weight: .black))
-                                .italic()
-                                .foregroundColor(.white.opacity(0.35))
-                                .tracking(2)
-                        }
-                        Link(destination: URL(string: "coco-sleep://begin-sleep")!) {
-                            Text("BEGIN SLEEP →")
-                                .font(.system(size: 11, weight: .black))
-                                .italic()
-                                .foregroundColor(.white)
-                                .tracking(1)
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 8)
-                                .background(cocoRed)
-                        }
+                    Link(destination: URL(string: "coco-sleep://begin-sleep")!) {
+                        Text(entry.isTracking ? "WAKE UP →" : "BEGIN SLEEP →")
+                            .font(.system(size: 11, weight: .black))
+                            .italic()
+                            .foregroundColor(.white)
+                            .tracking(1)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(cocoRed)
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(.trailing, 14)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .frame(maxWidth: .infinity)
+                .padding(.leading, 8)
+                .padding(.trailing, 18)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 }

@@ -30,6 +30,7 @@ export interface WidgetState {
   bedtimeTime: string; // "HH:MM" e.g. "22:30"
   wakeTime: string;    // "HH:MM" e.g. "07:00"
   cocoLevel: string;   // "bad" | "normal" | "leather" | "gold" | "diamond"
+  cocoLevelNum?: number; // numeric level from cocoStore (1, 2, 3 …)
 }
 
 export async function syncWidgetState(state: WidgetState): Promise<void> {
@@ -44,6 +45,9 @@ export async function syncWidgetState(state: WidgetState): Promise<void> {
     await SharedGroupPreferences.setItem('bedtimeTime', state.bedtimeTime, APP_GROUP);
     await SharedGroupPreferences.setItem('wakeTime', state.wakeTime, APP_GROUP);
     await SharedGroupPreferences.setItem('cocoLevel', state.cocoLevel, APP_GROUP);
+    if (state.cocoLevelNum !== undefined) {
+      await SharedGroupPreferences.setItem('cocoLevelNum', state.cocoLevelNum, APP_GROUP);
+    }
 
     // Tell WidgetKit to reload timelines
     const { WidgetKit } = NativeModules;

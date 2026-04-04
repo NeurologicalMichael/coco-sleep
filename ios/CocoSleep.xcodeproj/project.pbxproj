@@ -26,6 +26,11 @@
 		E38520B293CA4083B77621AD /* CocoDeviceActivityMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 800AFF70DB954DAABE606656 /* CocoDeviceActivityMonitor.swift */; };
 		E5853596A68D1BD03CC0A952 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 6433EE9E8185C7930DC1D9DE /* PrivacyInfo.xcprivacy */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
+		AA001111222233334444BBBB /* growth_seed_3.png in Resources */ = {isa = PBXBuildFile; fileRef = AA001111222233334444AAAA /* growth_seed_3.png */; };
+		BB001111222233334444BBBB /* growth_baby_3.png in Resources */ = {isa = PBXBuildFile; fileRef = BB001111222233334444AAAA /* growth_baby_3.png */; };
+		CC001111222233334444BBBB /* growth_growing_3.png in Resources */ = {isa = PBXBuildFile; fileRef = CC001111222233334444AAAA /* growth_growing_3.png */; };
+		DD001111222233334444BBBB /* growth_mature_3.png in Resources */ = {isa = PBXBuildFile; fileRef = DD001111222233334444AAAA /* growth_mature_3.png */; };
+		EE001111222233334444BBBB /* growth_legendary_3.png in Resources */ = {isa = PBXBuildFile; fileRef = EE001111222233334444AAAA /* growth_legendary_3.png */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -79,6 +84,11 @@
 		F37A38C5DF9726B251C97044 /* Pods-CocoSleep.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-CocoSleep.release.xcconfig"; path = "Target Support Files/Pods-CocoSleep/Pods-CocoSleep.release.xcconfig"; sourceTree = "<group>"; };
 		F47EBB8FADF64A60837BFCF2 /* DeviceActivity.framework */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = wrapper.framework; name = DeviceActivity.framework; path = System/Library/Frameworks/DeviceActivity.framework; sourceTree = SDKROOT; };
 		FB3A56C6773E4A00BD087F2F /* SwiftUI.framework */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		AA001111222233334444AAAA /* growth_seed_3.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = growth_seed_3.png; path = CocoWidget/growth_seed_3.png; sourceTree = "<group>"; };
+		BB001111222233334444AAAA /* growth_baby_3.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = growth_baby_3.png; path = CocoWidget/growth_baby_3.png; sourceTree = "<group>"; };
+		CC001111222233334444AAAA /* growth_growing_3.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = growth_growing_3.png; path = CocoWidget/growth_growing_3.png; sourceTree = "<group>"; };
+		DD001111222233334444AAAA /* growth_mature_3.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = growth_mature_3.png; path = CocoWidget/growth_mature_3.png; sourceTree = "<group>"; };
+		EE001111222233334444AAAA /* growth_legendary_3.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = growth_legendary_3.png; path = CocoWidget/growth_legendary_3.png; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -319,6 +329,11 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AA001111222233334444BBBB /* growth_seed_3.png in Resources */,
+				BB001111222233334444BBBB /* growth_baby_3.png in Resources */,
+				CC001111222233334444BBBB /* growth_growing_3.png in Resources */,
+				DD001111222233334444BBBB /* growth_mature_3.png in Resources */,
+				EE001111222233334444BBBB /* growth_legendary_3.png in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

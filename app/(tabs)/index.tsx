@@ -324,7 +324,7 @@ export default function HomeScreen() {
     void syncWidgetState({
       recoveryScore: null, streak, tierName: getTierForLevel(tier).name, mood,
       isTracking: true, bedtimeTime: coachSettings.bedtimeReminderTime,
-      wakeTime: coachSettings.wakeTime, cocoLevel: 'normal',
+      wakeTime: coachSettings.wakeTime, cocoLevel: 'normal', cocoLevelNum: cocoLevel,
     });
   }
 
@@ -352,7 +352,7 @@ export default function HomeScreen() {
     void syncWidgetState({
       recoveryScore: null, streak, tierName: getTierForLevel(tier).name, mood,
       isTracking: true, bedtimeTime: coachSettings.bedtimeReminderTime,
-      wakeTime: coachSettings.wakeTime, cocoLevel: 'normal',
+      wakeTime: coachSettings.wakeTime, cocoLevel: 'normal', cocoLevelNum: cocoLevel,
     });
   }
 
@@ -425,6 +425,7 @@ export default function HomeScreen() {
       tierName: getTierForLevel(evolution.newTier ?? tier).name, mood, isTracking: false,
       bedtimeTime: coachSettings.bedtimeReminderTime, wakeTime: coachSettings.wakeTime,
       cocoLevel: scoreToCocoLevel(processed.recovery.recoveryScore),
+      cocoLevelNum: cocoLevel,
     });
   }
 
