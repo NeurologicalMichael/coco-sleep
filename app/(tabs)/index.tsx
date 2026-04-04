@@ -345,6 +345,7 @@ export default function HomeScreen() {
       recoveryScore: null, streak, tierName: getTierForLevel(tier).name, mood,
       isTracking: true, bedtimeTime: coachSettings.bedtimeReminderTime,
       wakeTime: coachSettings.wakeTime, cocoLevel: 'normal', cocoLevelNum: cocoLevel,
+      growthImageName,
     });
   }
 
@@ -373,6 +374,7 @@ export default function HomeScreen() {
       recoveryScore: null, streak, tierName: getTierForLevel(tier).name, mood,
       isTracking: true, bedtimeTime: coachSettings.bedtimeReminderTime,
       wakeTime: coachSettings.wakeTime, cocoLevel: 'normal', cocoLevelNum: cocoLevel,
+      growthImageName,
     });
   }
 
@@ -380,6 +382,7 @@ export default function HomeScreen() {
     void syncWidgetState({
       recoveryScore: 0, streak, tierName: getTierForLevel(tier).name, mood, isTracking: false,
       bedtimeTime: coachSettings.bedtimeReminderTime, wakeTime: coachSettings.wakeTime, cocoLevel: 'normal',
+      growthImageName,
     });
     stopBackgroundKeepAlive();
     void stopAudioSampling();
@@ -405,6 +408,7 @@ export default function HomeScreen() {
     void syncWidgetState({
       recoveryScore: 0, streak, tierName: getTierForLevel(tier).name, mood, isTracking: false,
       bedtimeTime: coachSettings.bedtimeReminderTime, wakeTime: coachSettings.wakeTime, cocoLevel: 'normal',
+      growthImageName,
     });
     stopBackgroundKeepAlive();
     await stopAudioSampling();
@@ -443,6 +447,7 @@ export default function HomeScreen() {
       bedtimeTime: coachSettings.bedtimeReminderTime, wakeTime: coachSettings.wakeTime,
       cocoLevel: scoreToCocoLevel(processed.recovery.recoveryScore),
       cocoLevelNum: cocoLevel,
+      growthImageName,
     });
   }
 
@@ -451,7 +456,10 @@ export default function HomeScreen() {
   const cocoGrowthPct = cocoGrowth.nextAt !== null
     ? Math.round(((streak - cocoGrowth.minStreak) / (cocoGrowth.nextAt - cocoGrowth.minStreak)) * 100)
     : 100;
-  const cocoSubImg = GROWTH_STAGE_IMAGES[cocoGrowth.stage][cocoGrowthPct >= 67 ? 2 : cocoGrowthPct >= 34 ? 1 : 0];
+  const cocoSubIdx = cocoGrowthPct >= 67 ? 2 : cocoGrowthPct >= 34 ? 1 : 0;
+  const cocoSubImg = GROWTH_STAGE_IMAGES[cocoGrowth.stage][cocoSubIdx];
+  // Exact asset name sent to widget so it always matches the app hero
+  const growthImageName = `growth_${cocoGrowth.stage}_${cocoSubIdx + 1}`;
 
   const watchConnected = watchStatus === 'authorized';
   const totalNights  = history.length;

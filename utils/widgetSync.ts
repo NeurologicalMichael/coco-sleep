@@ -31,6 +31,7 @@ export interface WidgetState {
   wakeTime: string;    // "HH:MM" e.g. "07:00"
   cocoLevel: string;   // "bad" | "normal" | "leather" | "gold" | "diamond"
   cocoLevelNum?: number; // numeric level from cocoStore (1, 2, 3 …)
+  growthImageName?: string; // exact asset name e.g. "growth_mature_1"
 }
 
 export async function syncWidgetState(state: WidgetState): Promise<void> {
@@ -47,6 +48,9 @@ export async function syncWidgetState(state: WidgetState): Promise<void> {
     await SharedGroupPreferences.setItem('cocoLevel', state.cocoLevel, APP_GROUP);
     if (state.cocoLevelNum !== undefined) {
       await SharedGroupPreferences.setItem('cocoLevelNum', state.cocoLevelNum, APP_GROUP);
+    }
+    if (state.growthImageName !== undefined) {
+      await SharedGroupPreferences.setItem('growthImageName', state.growthImageName, APP_GROUP);
     }
 
     // Tell WidgetKit to reload timelines

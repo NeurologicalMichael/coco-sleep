@@ -12,6 +12,7 @@ struct CocoEntry: TimelineEntry {
     let isTracking: Bool
     let cocoLevel: String  // "bad" | "normal" | "leather" | "gold" | "diamond"
     let cocoLevelNum: Int  // numeric level from store (1, 2, 3 …)
+    let growthImageName: String  // exact asset name e.g. "growth_mature_1"
 }
 
 // react-native-shared-group-preferences stores values as JSON strings
@@ -28,24 +29,30 @@ private func readDefaults() -> CocoEntry {
     }
 
     let levelNum = intVal("cocoLevelNum")
+    let streak = intVal("streak")
+    // Use the exact image name written by the JS side; fall back to streak-based calculation
+    let savedImageName = strVal("growthImageName")
+    let resolvedImageName: String
+    if savedImageName.isEmpty {
+        // Fallback: compute from streak (sub-image _1 is safest default)
+        if streak >= 21 { resolvedImageName = "growth_legendary_1" }
+        else if streak >= 11 { resolvedImageName = "growth_mature_1" }
+        else if streak >= 6  { resolvedImageName = "growth_growing_1" }
+        else if streak >= 3  { resolvedImageName = "growth_baby_1" }
+        else { resolvedImageName = "growth_seed_1" }
+    } else {
+        resolvedImageName = savedImageName
+    }
     return CocoEntry(
         date: Date(),
         recoveryScore: intVal("recoveryScore"),
-        streak: intVal("streak"),
+        streak: streak,
         tierName: strVal("tierName"),
         isTracking: intVal("isTracking") == 1,
         cocoLevel: strVal("cocoLevel").isEmpty ? "normal" : strVal("cocoLevel"),
-        cocoLevelNum: levelNum > 0 ? levelNum : 1
+        cocoLevelNum: levelNum > 0 ? levelNum : 1,
+        growthImageName: resolvedImageName
     )
-}
-
-// Returns the growth stage PNG name based on streak
-private func growthImageName(_ streak: Int) -> String {
-    if streak >= 21 { return "growth_legendary_3" }
-    if streak >= 11 { return "growth_mature_3" }
-    if streak >= 6  { return "growth_growing_3" }
-    if streak >= 3  { return "growth_baby_3" }
-    return "growth_seed_3"
 }
 
 // Streak color: white at 0 days, fully gold (#F5C842) at 14+ days
@@ -59,19 +66,10 @@ private func streakColor(_ streak: Int) -> Color {
     )
 }
 
-// Load growth stage PNG from the widget extension bundle
-private func growthImage(_ streak: Int) -> Image {
-    let name = growthImageName(streak)
-    if let ui = UIImage(named: name) {
-        return Image(uiImage: ui)
-    }
-    return Image(systemName: "leaf.fill")
-}
-
 // MARK: - Provider
 struct CocoProvider: TimelineProvider {
     func placeholder(in context: Context) -> CocoEntry {
-        CocoEntry(date: Date(), recoveryScore: 82, streak: 11, tierName: "Coconut", isTracking: false, cocoLevel: "gold", cocoLevelNum: 2)
+        CocoEntry(date: Date(), recoveryScore: 82, streak: 11, tierName: "Coconut", isTracking: false, cocoLevel: "gold", cocoLevelNum: 2, growthImageName: "growth_mature_1")
     }
 
     func getSnapshot(in context: Context, completion: @escaping (CocoEntry) -> Void) {
@@ -188,10 +186,16 @@ struct CocoMediumView: View {
             HStack(spacing: 0) {
                 // Left: growth stage image + Level label
                 VStack(spacing: 4) {
-                    growthImage(entry.streak)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 108, height: 108)
+                    Group {
+                        if let ui = UIImage(named: entry.growthImageName) {
+                            Image(uiImage: ui)
+                        } else {
+                            Image(systemName: "leaf.fill")
+                        }
+                    }
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 108, height: 108)
                     Text("LEVEL \(entry.cocoLevelNum)")
                         .font(.system(size: 19, weight: .black))
                         .italic()
