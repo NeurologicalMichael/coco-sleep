@@ -432,6 +432,7 @@ const s = StyleSheet.create({
     gap: 1,
     backgroundColor: Colors.bgDeep,
     padding: 2,
+    overflow: 'hidden',
   },
   graphBar: {
     flex: 1,
