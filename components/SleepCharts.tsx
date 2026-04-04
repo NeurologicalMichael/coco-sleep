@@ -187,8 +187,8 @@ type MovLevel = 'still' | 'movement' | 'heavy';
 
 const MOV_LABEL: Record<MovLevel, string> = {
   still:    'STILL',
-  movement: 'MOVEMENT',
-  heavy:    'HEAVY',
+  movement: 'LIGHT MOVEMENT',
+  heavy:    'HEAVY MOVEMENT',
 };
 
 const MOV_COLOR: Record<MovLevel, string> = {
@@ -373,14 +373,14 @@ const s = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: Colors.textSecondary,
-    width: 44,
+    flex: 1,
   },
   hypoLegendDur: {
     fontSize: 11,
     fontWeight: '900',
     color: Colors.textPrimary,
     textAlign: 'right',
-    flex: 1,
+    width: 52,
   },
   soundsRow: {
     flexDirection: 'row',
