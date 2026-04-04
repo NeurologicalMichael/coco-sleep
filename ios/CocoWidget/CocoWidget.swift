@@ -189,12 +189,14 @@ struct CocoMediumView: View {
                     Group {
                         if let ui = UIImage(named: entry.growthImageName) {
                             Image(uiImage: ui)
+                                .resizable()
+                                .scaledToFit()
                         } else {
                             Image(systemName: "leaf.fill")
+                                .resizable()
+                                .scaledToFit()
                         }
                     }
-                    .resizable()
-                    .scaledToFit()
                     .frame(width: 108, height: 108)
                     Text("LEVEL \(entry.cocoLevelNum)")
                         .font(.system(size: 19, weight: .black))
