@@ -7,7 +7,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { Colors } from '../../constants/colors';
 import { DiagonalStripes } from '../../components/DiagonalStripes';
 import { syncWidgetState } from '../../utils/widgetSync';
-import { useCocoStore } from '../../store/cocoStore';
+import { useCocoStore, cocoLevelXpProgress } from '../../store/cocoStore';
 import { useAuthStore } from '../../store/authStore';
 import { useActivityStore } from '../../store/activityStore';
 import { useRecoveryStore, ProcessedSession } from '../../store/recoveryStore';
@@ -36,6 +36,7 @@ import * as Haptics from 'expo-haptics';
 import { useAudioPlayer } from 'expo-audio';
 import { startBackgroundKeepAlive, stopBackgroundKeepAlive } from '../../utils/backgroundKeepAlive';
 import { scheduleSocialNotifications } from '../../utils/notifications';
+import { parseTimeHM } from '../../utils/timeHelpers';
 import { StageTimeline, MovementGraph, StageBreakdown } from '../../components/SleepCharts';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -108,9 +109,9 @@ export default function HomeScreen() {
   const { processSession } = useRecoveryInsights();
   const { processSession: evolve } = useCocoEvolution();
   const { status: watchStatus, checkAndAuthorize, fetchNightData } = useWatchTracking();
-  const { streak, tier, mood, cocoLevel, lastCelebratedLevel, applySessionLevel, applyMissedDayDecay, markLevelCelebrated } = useCocoStore();
+  const { streak, tier, mood, cocoLevel, cocoXP, lastCelebratedLevel, applyMissedDayDecay, markLevelCelebrated } = useCocoStore();
   const { username, userId } = useAuthStore();
-  const { settings: coachSettings } = useCoachStore();
+  const { settings: coachSettings, screenTimeAuthorized } = useCoachStore();
   const { history } = useRecoveryStore();
   const { latestSession } = useRecoveryStore();
   const { steps, stepGoal, waterIntake, waterGoal, addWater, removeWater } = useActivityStore();
@@ -173,7 +174,26 @@ export default function HomeScreen() {
   useFocusEffect(useCallback(() => {
     forceRender((n) => n + 1);
     applyMissedDayDecay();
-  }, [applyMissedDayDecay]));
+    // Enforce screen time block if we're inside the sleep window (only if authorized)
+    if (coachSettings.screenTimeEnabled && screenTimeAuthorized && ScreenTimeManager.isAvailable) {
+      const bed  = parseTimeHM(coachSettings.bedtimeReminderTime ?? '22:30');
+      const wake = parseTimeHM(coachSettings.wakeTime ?? '07:00');
+      if (bed && wake) {
+        const now     = new Date();
+        const nowMin  = now.getHours() * 60 + now.getMinutes();
+        const bedMin  = bed.h * 60 + bed.m;
+        const wakeMin = wake.h * 60 + wake.m;
+        const inWindow = bedMin > wakeMin
+          ? (nowMin >= bedMin || nowMin < wakeMin)
+          : (nowMin >= bedMin && nowMin < wakeMin);
+        if (inWindow) {
+          void ScreenTimeManager.startSleepBlock([], 480);
+        } else {
+          try { ScreenTimeManager.stopSleepBlock(); } catch { /* no-op */ }
+        }
+      }
+    }
+  }, [applyMissedDayDecay, coachSettings.screenTimeEnabled, coachSettings.bedtimeReminderTime, coachSettings.wakeTime]));
 
   useEffect(() => {
     if (!pendingWidgetToggle) return;
@@ -410,14 +430,11 @@ export default function HomeScreen() {
       raw.audioEvents = await matchClipsToEvents(raw.audioEvents);
     }
     const processed = processSession(raw);
-    const prevLevel = cocoLevel;
-    applySessionLevel(processed.recovery.recoveryScore);
-    // Show level-up celebration immediately if level went up
-    const newLevel = processed.recovery.recoveryScore > 60 ? prevLevel + 1 : prevLevel;
-    if (newLevel > prevLevel) triggerLevelUpCelebration(newLevel);
     // Social notification (fire & forget — throttled, no-ops if no friends)
     if (userId) void scheduleSocialNotifications(userId, processed.recovery.recoveryScore, streak);
     const evolution  = evolve(processed.recovery.recoveryScore);
+    // Level-up celebration based on XP threshold — NOT just tracking a day
+    if (evolution.leveledUp) triggerLevelUpCelebration(evolution.newLevel);
     const growth = streakToGrowthStage(streak + 1);
     if (evolution.tieredUp) Alert.alert('COCO EVOLVED', `Coco reached ${evolution.tierName}.\nKeep the streak going to unlock ${growth.name}.`);
     void syncWidgetState({
@@ -561,6 +578,20 @@ export default function HomeScreen() {
         {(() => {
           return (
             <View style={styles.growthHero}>
+              {/* Streak — single line "12 Day Streak" */}
+              {(() => {
+                const t = Math.min(streak / 14, 1);
+                const g = 1.0 - 0.22 * t;
+                const b = 1.0 - 0.74 * t;
+                const streakHex = `rgb(255,${Math.round(g*255)},${Math.round(b*255)})`;
+                const glowRadius = 4 + 20 * t;
+                return (
+                  <Text style={[styles.growthStreakLine, { color: streakHex, textShadowColor: streakHex, textShadowRadius: glowRadius }]}>
+                    {streak} Day Streak
+                  </Text>
+                );
+              })()}
+
               {/* Coco hero image — animated idle */}
               <View style={styles.growthHeroWrap}>
                 <Animated.View style={cocoIdleStyle}>
@@ -568,26 +599,27 @@ export default function HomeScreen() {
                 </Animated.View>
               </View>
 
-              {/* Level — grand metallic gold */}
+              {/* Level */}
               <Text style={styles.growthLevelNum}>
-                LVL {cocoLevel}
+                LEVEL {cocoLevel}
               </Text>
 
-              {/* Stage name */}
-              <Text style={[styles.growthStageName, { color: cocoGrowth.color }]}>{cocoGrowth.name}</Text>
-
-              {/* Streak — golden glow, brighter with more days */}
+              {/* XP progress bar */}
               {(() => {
-                const t = Math.min(streak / 14, 1);
-                const r = 1.0;
-                const g = 1.0 - 0.22 * t;
-                const b = 1.0 - 0.74 * t;
-                const streakHex = `rgb(${Math.round(r*255)},${Math.round(g*255)},${Math.round(b*255)})`;
-                const glowRadius = 4 + 20 * t;
+                const xpProgress = cocoLevelXpProgress(cocoXP);
+                const isMaxLevel = xpProgress.needed === 0;
                 return (
-                  <View style={styles.growthStreakBadge}>
-                    <Text style={[styles.growthStreakNum, { color: streakHex, textShadowColor: streakHex, textShadowRadius: glowRadius }]}>{streak}</Text>
-                    <Text style={[styles.growthStreakLabel, { color: streakHex, opacity: 0.8 }]}>DAY STREAK</Text>
+                  <View style={styles.xpBarWrap}>
+                    <View style={styles.xpBarLevelRow}>
+                      <Text style={styles.xpBarLevelLabel}>LVL {cocoLevel}</Text>
+                      <Text style={styles.xpBarLevelLabel}>{isMaxLevel ? 'MAX' : `LVL ${cocoLevel + 1}`}</Text>
+                    </View>
+                    <View style={styles.xpBarTrack}>
+                      <View style={[styles.xpBarFill, { width: `${isMaxLevel ? 100 : xpProgress.pct}%` as any }]} />
+                    </View>
+                    <Text style={styles.xpBarLabel}>
+                      {isMaxLevel ? 'MAX LEVEL' : `${xpProgress.current} / ${xpProgress.needed} XP`}
+                    </Text>
                   </View>
                 );
               })()}
@@ -634,31 +666,6 @@ export default function HomeScreen() {
                   : 'base target'}
               </Text>
             </View>
-          </View>
-
-          {/* Strain / Recovery balance bar */}
-          <View style={styles.reBalanceRow}>
-            <View style={styles.reBalanceTrack}>
-              <View style={[
-                styles.reBalanceFill,
-                {
-                  width: `${Math.round(strainBalance.balance * 100)}%` as any,
-                  backgroundColor:
-                    strainBalance.color === 'green' ? Colors.green :
-                    strainBalance.color === 'gold' ? Colors.gold : Colors.red,
-                }
-              ]} />
-            </View>
-            <Text style={[
-              styles.reBalanceLabel,
-              {
-                color: strainBalance.color === 'green' ? Colors.green :
-                  strainBalance.color === 'gold' ? Colors.gold : Colors.red,
-              }
-            ]}>
-              {strainBalance.label}
-            </Text>
-            <Text style={styles.reBalanceSub}>7-DAY STRAIN / RECOVERY</Text>
           </View>
 
           {recoveryScore !== null && (
@@ -1019,7 +1026,7 @@ const styles = StyleSheet.create({
   growthHeroWrap: {
     alignItems: 'center', justifyContent: 'center', marginBottom: 4,
   },
-  growthHeroImg: { width: 190, height: 190 },
+  growthHeroImg: { width: 360, height: 360 },
   growthLevelNum: {
     fontSize: 52, fontWeight: '900', fontStyle: 'italic', letterSpacing: 4,
     color: '#F5C842',
@@ -1051,6 +1058,25 @@ const styles = StyleSheet.create({
   },
   growthStreakLabel: { fontSize: 10, fontWeight: '900', letterSpacing: 3, textShadowOffset: { width: 0, height: 0 } },
   growthStreakNum: { fontSize: 72, fontWeight: '900', fontStyle: 'italic', lineHeight: 76, textShadowOffset: { width: 0, height: 0 } },
+  growthStreakLine: {
+    fontSize: 44, fontWeight: '900', fontStyle: 'italic', letterSpacing: 1,
+    marginTop: 18, textShadowOffset: { width: 0, height: 0 },
+  },
+  xpBarWrap: { width: '90%', alignItems: 'center', marginTop: 8, gap: 6 },
+  xpBarLevelRow: { width: '100%', flexDirection: 'row', justifyContent: 'space-between' },
+  xpBarLevelLabel: { fontSize: 11, fontWeight: '900', letterSpacing: 1.5, color: Colors.gold, opacity: 0.6 },
+  xpBarTrack: {
+    width: '100%', height: 22, backgroundColor: '#1a1a1a',
+    borderRadius: 0, overflow: 'hidden',
+    borderWidth: 2, borderColor: Colors.gold,
+  },
+  xpBarFill: {
+    height: '100%', backgroundColor: Colors.gold,
+  },
+  xpBarLabel: {
+    fontSize: 14, fontWeight: '900', letterSpacing: 2,
+    color: Colors.gold, opacity: 0.75,
+  },
   growthStageRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginBottom: 6 },
   growthStageName: { fontSize: 15, fontWeight: '900', fontStyle: 'italic', letterSpacing: 3, marginBottom: 2 },
   growthStageDesc: { fontSize: 10, color: Colors.textMuted, fontStyle: 'italic', marginBottom: 6 },

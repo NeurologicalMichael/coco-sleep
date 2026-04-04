@@ -19,6 +19,7 @@ import { Colors } from '../constants/colors';
 import { ScreenTimeManager } from '../modules/ScreenTimeManager';
 import { parseTimeHM } from '../utils/timeHelpers';
 import { HealthKitPermissionModal } from '../components/HealthKitPermissionModal';
+import * as Notifications from 'expo-notifications';
 
 function isInSleepWindow(bedtime: string, wakeTime: string): boolean {
   const bed = parseTimeHM(bedtime);
@@ -196,10 +197,49 @@ export default function RootLayout() {
     // Check immediately on mount
     checkAndEnforceBlock();
 
+    // Foreground resume check
     const sub = AppState.addEventListener('change', (state) => {
       if (state === 'active') checkAndEnforceBlock();
     });
-    return () => sub.remove();
+
+    // Periodic check every 60s so bedtime is enforced even when app stays foregrounded
+    const interval = setInterval(checkAndEnforceBlock, 60_000);
+
+    return () => { sub.remove(); clearInterval(interval); };
+  }, []);
+
+  // Notification-based screen time enforcement.
+  // When the bedtime notification fires (app in foreground) OR the user taps it
+  // (app in background/cold start), immediately start the sleep block so we don't
+  // depend solely on the DeviceActivity extension.
+  useEffect(() => {
+    if (!ScreenTimeManager.isAvailable) return;
+
+    function maybeStartBlock() {
+      const { settings } = useCoachStore.getState();
+      if (!settings.screenTimeEnabled) return;
+      const bedtime  = settings.bedtimeReminderTime ?? '22:30';
+      const wakeTime = settings.wakeTime ?? '07:00';
+      if (isInSleepWindow(bedtime, wakeTime)) {
+        void ScreenTimeManager.startSleepBlock([], 480);
+      }
+    }
+
+    // Fires when app is foregrounded and notification arrives
+    const receivedSub = Notifications.addNotificationReceivedListener((notif) => {
+      if (notif.request.content.data?.type === 'bedtime') {
+        maybeStartBlock();
+      }
+    });
+
+    // Fires when user taps the bedtime notification from lock screen / notification center
+    const responseSub = Notifications.addNotificationResponseReceivedListener((response) => {
+      if (response.notification.request.content.data?.type === 'bedtime') {
+        maybeStartBlock();
+      }
+    });
+
+    return () => { receivedSub.remove(); responseSub.remove(); };
   }, []);
 
   // Handle widget deep links when app is already open (foreground URL events).

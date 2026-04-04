@@ -13,9 +13,32 @@ function daysBetween(a: string, b: string): number {
   return Math.round((new Date(b).getTime() - new Date(a).getTime()) / 86_400_000);
 }
 
+// XP thresholds for each cocoLevel (index = level - 1)
+const COCO_LEVEL_XP_THRESHOLDS = [0, 200, 500, 1000, 2000, 4000, 7000];
+
+function xpToCocoLevel(xp: number): number {
+  let level = 1;
+  for (let i = 1; i < COCO_LEVEL_XP_THRESHOLDS.length; i++) {
+    if (xp >= COCO_LEVEL_XP_THRESHOLDS[i]) level = i + 1;
+    else break;
+  }
+  return level;
+}
+
+export function cocoLevelXpProgress(xp: number): { current: number; needed: number; pct: number } {
+  const level = xpToCocoLevel(xp);
+  const currentFloor = COCO_LEVEL_XP_THRESHOLDS[level - 1] ?? 0;
+  const nextThreshold = COCO_LEVEL_XP_THRESHOLDS[level] ?? null;
+  if (nextThreshold === null) return { current: xp - currentFloor, needed: 0, pct: 100 };
+  const span = nextThreshold - currentFloor;
+  const progress = xp - currentFloor;
+  return { current: progress, needed: span, pct: Math.round((progress / span) * 100) };
+}
+
 interface CocoStore {
   tier: number;
   xp: number;
+  cocoXP: number;
   streak: number;
   longestStreak: number;
   totalSessions: number;
@@ -25,11 +48,13 @@ interface CocoStore {
   lastTrackedDate: string | null;
   lastCelebratedLevel: number;
   addXP: (amount: number) => { tieredUp: boolean; newTier: number };
+  /** Add XP from a sleep score (score/2 XP) and derive new cocoLevel. */
+  addSessionXP: (score: number) => { leveledUp: boolean; newLevel: number };
   incrementStreak: () => void;
   setMood: (mood: CocoMood) => void;
   updateFromScore: (score: number) => void;
   setHasSeenOnboarding: () => void;
-  /** Call after a session ends with the sleep score. Increments level if score > 60. */
+  /** @deprecated – level now driven by addSessionXP */
   applySessionLevel: (score: number) => void;
   /** Call on app focus — decrements level for each missed day after the first. */
   applyMissedDayDecay: () => void;
@@ -40,8 +65,16 @@ interface CocoStore {
 export const useCocoStore = create<CocoStore>()(
   persist(
     (set, get) => ({
-      tier: 1, xp: 0, streak: 0, longestStreak: 0, totalSessions: 0, mood: 'neutral', hasSeenOnboarding: false,
+      tier: 1, xp: 0, cocoXP: 0, streak: 0, longestStreak: 0, totalSessions: 0, mood: 'neutral', hasSeenOnboarding: false,
       cocoLevel: 1, lastTrackedDate: null, lastCelebratedLevel: 0,
+      addSessionXP: (score) => {
+        const { cocoXP, cocoLevel } = get();
+        const gain = Math.round(score / 2);
+        const newXP = cocoXP + gain;
+        const newLevel = xpToCocoLevel(newXP);
+        set({ cocoXP: newXP, cocoLevel: newLevel, lastTrackedDate: todayStr() });
+        return { leveledUp: newLevel > cocoLevel, newLevel };
+      },
       addXP: (amount) => {
         const { xp, tier } = get();
         const newXP = xp + amount;

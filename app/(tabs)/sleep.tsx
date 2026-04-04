@@ -10,7 +10,7 @@ import { syncWidgetState } from '../../utils/widgetSync';
 import { useCocoStore } from '../../store/cocoStore';
 import { useRecoveryStore, ProcessedSession } from '../../store/recoveryStore';
 import { getTierForLevel } from '../../constants/tiers';
-import { scoreToCocoLevel, COCO_LEVELS } from '../../constants/cocoLevels';
+import { scoreToCocoLevel, COCO_LEVELS, streakToGrowthStage, GROWTH_STAGE_IMAGES } from '../../constants/cocoLevels';
 import { useSleepStore, DataSource } from '../../store/sleepStore';
 import { useWatchTracking } from '../../hooks/useWatchTracking';
 import { useRecoveryInsights } from '../../hooks/useRecoveryInsights';
@@ -84,7 +84,7 @@ export default function SleepScreen() {
   const { processSession } = useRecoveryInsights();
   const { processSession: evolve } = useCocoEvolution();
   const { status: watchStatus, checkAndAuthorize, fetchNightData } = useWatchTracking();
-  const { streak, tier, mood } = useCocoStore();
+  const { streak, tier, mood, cocoLevel, cocoXP } = useCocoStore();
   const { settings: coachSettings } = useCoachStore();
   const { history } = useRecoveryStore();
   const { isPremium } = usePurchaseStore();
@@ -424,13 +424,22 @@ export default function SleepScreen() {
 
   // ── Sleep Log (idle) ───────────────────────────────────────────────────────
 
+  // Growth stage image — same sub-image logic as _layout.tsx
+  const cocoGrowth = streakToGrowthStage(streak);
+  const cocoGrowthPct = cocoGrowth.nextAt !== null
+    ? Math.round(((streak - cocoGrowth.minStreak) / (cocoGrowth.nextAt - cocoGrowth.minStreak)) * 100)
+    : 100;
+  const cocoSubImg = GROWTH_STAGE_IMAGES[cocoGrowth.stage][cocoGrowthPct >= 67 ? 2 : cocoGrowthPct >= 34 ? 1 : 0];
+
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.logHeader}>
-        <Text style={styles.eyebrow}>// SLEEP</Text>
-        <Text style={styles.logTitle}>SLEEP LOG</Text>
-        <View style={styles.titleBar} />
+      {/* Hero: Level, coconut image, streak */}
+      <View style={styles.heroSection}>
+        <Text style={styles.heroLevel}>LEVEL {cocoLevel}</Text>
+        <Image source={cocoSubImg} style={styles.heroImage} resizeMode="contain" />
+        <Text style={styles.heroStageName}>{cocoGrowth.name}</Text>
+        <Text style={styles.heroStreakNum}>{streak}</Text>
+        <Text style={styles.heroStreakLabel}>DAY STREAK</Text>
       </View>
 
       {/* Horizontal tab bar */}
@@ -832,8 +841,31 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bgDeep },
   eyebrow: { fontSize: 9, fontWeight: '900', fontStyle: 'italic', letterSpacing: 3, color: Colors.red, marginBottom: 4 },
 
-  // ── Log header ──────────────────────────────────────────────────────────────
-  logHeader: { paddingHorizontal: 24, paddingTop: 56, paddingBottom: 16 },
+  // ── Hero section ─────────────────────────────────────────────────────────────
+  heroSection: {
+    alignItems: 'center', paddingTop: 52, paddingBottom: 16,
+    backgroundColor: Colors.bgDeep,
+  },
+  heroLevel: {
+    fontSize: 13, fontWeight: '900', fontStyle: 'italic', letterSpacing: 3,
+    color: Colors.gold, marginBottom: 8,
+  },
+  heroImage: { width: 160, height: 160 },
+  heroStageName: {
+    fontSize: 11, fontWeight: '900', fontStyle: 'italic', letterSpacing: 4,
+    color: Colors.gold, opacity: 0.7, marginTop: 6, marginBottom: 2,
+  },
+  heroStreakNum: {
+    fontSize: 64, fontWeight: '900', fontStyle: 'italic',
+    color: Colors.gold, lineHeight: 68,
+    textShadowColor: '#FFE066', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 14,
+  },
+  heroStreakLabel: {
+    fontSize: 9, fontWeight: '900', fontStyle: 'italic', letterSpacing: 4,
+    color: Colors.textMuted, marginTop: 2,
+  },
+
+  // ── Log header (kept for modal reuse) ───────────────────────────────────────
   logTitle: { fontSize: 46, fontWeight: '900', fontStyle: 'italic', color: Colors.textPrimary, lineHeight: 48 },
   titleBar: { height: 3, width: 52, backgroundColor: Colors.red, marginTop: 6 },
 
