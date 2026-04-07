@@ -140,7 +140,7 @@ struct CocoMediumView: View {
                         Text("DAY STREAK")
                             .font(.system(size: 8, weight: .black))
                             .italic()
-                            .foregroundColor(.white.opacity(0.35))
+                            .foregroundColor(streakColor(entry.streak).opacity(0.75))
                             .tracking(2)
                     }
                     Link(destination: URL(string: "coco-sleep://begin-sleep")!) {
