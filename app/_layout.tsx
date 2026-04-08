@@ -48,8 +48,12 @@ export default function RootLayout() {
   const [loadingDone, setLoadingDone] = useState(false);
   const loadingOpacity = useRef(new Animated.Value(0)).current;
 
-  // Level-up modal (fires on boot, regardless of which tab is active)
-  const { cocoLevel, lastCelebratedLevel, markLevelCelebrated, streak } = useCocoStore();
+  // Level-up modal (fires on boot and during active sessions when level changes)
+  // Each value uses its own selector so Zustand's Object.is check never creates a new object
+  const cocoLevel           = useCocoStore((s) => s.cocoLevel);
+  const lastCelebratedLevel = useCocoStore((s) => s.lastCelebratedLevel);
+  const markLevelCelebrated = useCocoStore((s) => s.markLevelCelebrated);
+  const streak              = useCocoStore((s) => s.streak);
   const [showLevelUpModal, setShowLevelUpModal] = useState(false);
   const [pendingLevel, setPendingLevel] = useState(0);
   const levelUpScale = useRef(new Animated.Value(1)).current;
@@ -79,12 +83,12 @@ export default function RootLayout() {
     void loadSession();
   }, []);
 
-  // Check for pending level-up once loading screen is done
+  // Check for pending level-up on boot and whenever cocoLevel changes mid-session
   useEffect(() => {
     if (loadingDone && cocoLevel > lastCelebratedLevel) {
       triggerLevelUpCelebration(cocoLevel);
     }
-  }, [loadingDone]);
+  }, [loadingDone, cocoLevel, lastCelebratedLevel]);
 
   // Loading screen: fade in → hold → fade out (~0.8s total)
   useEffect(() => {
@@ -109,13 +113,22 @@ export default function RootLayout() {
     }
   }, [loadingDone, hasSeenOnboarding, healthKitPermissionAsked]);
 
-  // Re-sync widget whenever bedtime, wake time, or tracking state changes
+  // Re-sync widget whenever any relevant state changes (including level and streak)
   const bedtimeTime = useCoachStore((s) => s.settings.bedtimeReminderTime);
   const wakeTime    = useCoachStore((s) => s.settings.wakeTime);
   const isTracking  = useSleepStore((s) => !!s.activeSession?.isActive);
   useEffect(() => {
-    const { streak, tier, mood } = useCocoStore.getState();
+    const { tier, mood } = useCocoStore.getState();
     const { latestSession } = useRecoveryStore.getState();
+
+    // Derive growth image name from streak so widget always shows the correct hero
+    const growthStage = streakToGrowthStage(streak);
+    const pct = growthStage.nextAt !== null
+      ? Math.round(((streak - growthStage.minStreak) / (growthStage.nextAt - growthStage.minStreak)) * 100)
+      : 100;
+    const variantIdx = pct >= 67 ? 2 : pct >= 34 ? 1 : 0;
+    const growthImageName = `growth_${growthStage.stage}_${variantIdx + 1}`;
+
     void syncWidgetState({
       recoveryScore: latestSession?.recovery.recoveryScore ?? null,
       streak,
@@ -125,9 +138,10 @@ export default function RootLayout() {
       bedtimeTime,
       wakeTime,
       cocoLevel: latestSession ? scoreToCocoLevel(latestSession.recovery.recoveryScore) : 'normal',
-      cocoLevelNum: useCocoStore.getState().cocoLevel,
+      cocoLevelNum: cocoLevel,
+      growthImageName,
     });
-  }, [bedtimeTime, wakeTime, isTracking]);
+  }, [bedtimeTime, wakeTime, isTracking, cocoLevel, streak]);
 
   // Cleanup: purge sessions under 10 minutes — only if any such sessions exist
   useEffect(() => {

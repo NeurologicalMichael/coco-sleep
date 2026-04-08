@@ -197,10 +197,15 @@ const MOV_COLOR: Record<MovLevel, string> = {
   heavy:    MOV_HEAVY,
 };
 
-function movLevel(magnitude: number, scale: number): MovLevel {
-  const ratio = magnitude / scale;
-  if (ratio < 0.1)  return 'still';
-  if (ratio < 0.5)  return 'movement';
+// Absolute thresholds calibrated to real sleep movement magnitudes.
+// Relative (P99-scaled) thresholds caused almost every epoch to read as
+// "heavy" because even the smallest movements dominated the scale.
+//   < 0.02  → truly still  (deep sleep level, gravity-stripped accel noise floor)
+//   < 0.08  → light movement (micro-shifts, breathing, N1/N2 transitions)
+//   ≥ 0.08  → heavy movement (actual body turns, disruptions)
+function movLevel(magnitude: number): MovLevel {
+  if (magnitude < 0.02) return 'still';
+  if (magnitude < 0.08) return 'movement';
   return 'heavy';
 }
 
@@ -216,14 +221,13 @@ export function MovementGraph({ events }: MovementGraphProps) {
   const startTs  = events[0].timestamp - EPOCH_MS;
   const endTs    = events[events.length - 1].timestamp;
 
-  // Use 99th-percentile to avoid one spike dominating the scale
-  const sorted = [...events.map((e) => e.magnitude)].sort((a, b) => a - b);
-  const p99    = sorted[Math.floor(sorted.length * 0.99)] ?? sorted[sorted.length - 1] ?? 0.01;
-  const scale  = Math.max(p99, 0.01);
+  // Fixed scale for bar heights: cap at 0.15 so heavy events fill the chart
+  // without one outlier spike compressing everything else.
+  const scale = 0.15;
 
   // Count epochs per level for legend
   const levelCounts: Record<MovLevel, number> = { still: 0, movement: 0, heavy: 0 };
-  for (const e of events) levelCounts[movLevel(e.magnitude, scale)]++;
+  for (const e of events) levelCounts[movLevel(e.magnitude)]++;
 
   return (
     <View style={s.card}>
@@ -232,7 +236,7 @@ export function MovementGraph({ events }: MovementGraphProps) {
       {/* Bar chart */}
       <View style={[s.graphTrack, { height: GRAPH_H }]}>
         {events.map((e, i) => {
-          const level  = movLevel(e.magnitude, scale);
+          const level  = movLevel(e.magnitude);
           const height = Math.max(2, Math.round((Math.min(e.magnitude, scale) / scale) * GRAPH_H));
           return (
             <View
