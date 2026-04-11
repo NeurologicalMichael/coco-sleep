@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Animated, View, Text, Image, StyleSheet, ScrollView,
-  TouchableOpacity, Modal, Alert, Platform,
+  TouchableOpacity, Modal, Alert, Platform, TextInput,
 } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Colors } from '../../constants/colors';
@@ -26,8 +26,7 @@ import { useSleepDebtStore } from '../../store/sleepDebtStore';
 import { usePurchaseStore } from '../../store/purchaseStore';
 import { useWorkoutStore } from '../../store/workoutStore';
 import { useUserProfileStore } from '../../store/userProfileStore';
-import { calcSleepTarget, calcStrainBalance, formatTargetHours } from '../../utils/recoveryTarget';
-import { WorkoutLogger } from '../../components/WorkoutLogger';
+import { calcSleepTarget, formatTargetHours } from '../../utils/recoveryTarget';
 import { estimateStageDurations, AudioEvent } from '../../utils/hrvProxy';
 import { SleepStage, generateEstimatedEvents } from '../../utils/sleepScore';
 import { startAudioSampling, stopAudioSampling, audioPermissionStatus, audioTypeLabel, audioTypeIcon, deleteAllClips, listSavedClips, matchClipsToEvents } from '../../utils/audioSampler';
@@ -52,6 +51,21 @@ const STAGE_CFG: Record<SleepStage, { label: string; sub: string; color: string 
   rem:        { label: 'REM',        sub: 'Dreaming — memory consolidation', color: '#EC4899'    },
   awake:      { label: 'AWAKE',      sub: 'Movement detected',               color: Colors.red   },
 };
+
+// Coco hero image map — 15 levels × 1 image each (5 stages × 3 variants).
+// Defined at module scope so both the render path and widget sync use the same source.
+const LEVEL_IMAGE_MAP: Array<[string, number]> = [
+  ['seed', 0], ['seed', 1], ['seed', 2],
+  ['baby', 0], ['baby', 1], ['baby', 2],
+  ['growing', 0], ['growing', 1], ['growing', 2],
+  ['mature', 0], ['mature', 1], ['mature', 2],
+  ['legendary', 0], ['legendary', 1], ['legendary', 2],
+];
+
+function levelToGrowthImageName(level: number): string {
+  const [stage, sub] = LEVEL_IMAGE_MAP[Math.min(level - 1, LEVEL_IMAGE_MAP.length - 1)];
+  return `growth_${stage}_${sub + 1}`;
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -115,7 +129,7 @@ export default function HomeScreen() {
   const { history } = useRecoveryStore();
   const { latestSession } = useRecoveryStore();
   const { steps, stepGoal, waterIntake, waterGoal, addWater, removeWater } = useActivityStore();
-  const { debtHours } = useSleepDebtStore();
+  useSleepDebtStore(); // keep subscription alive for other store listeners
   const { isPremium } = usePurchaseStore();
   const { getForDate, getRecent } = useWorkoutStore();
   const { ageRange } = useUserProfileStore();
@@ -124,9 +138,6 @@ export default function HomeScreen() {
   const todayStr = new Date().toISOString().slice(0, 10);
   const todayWorkout = getForDate(todayStr);
   const sleepTarget = calcSleepTarget(ageRange, todayWorkout);
-  const recentWorkouts = getRecent(7);
-  const recentSessions = history.slice(0, 7);
-  const strainBalance = calcStrainBalance(recentSessions, recentWorkouts);
   const adjustedScore = latestSession
     ? Math.min(Math.round((latestSession.durationHours / sleepTarget) * 100), 110)
     : null;
@@ -134,8 +145,6 @@ export default function HomeScreen() {
   const currentTier = getTierForLevel(tier);
   const recoveryScore = latestSession?.recovery.recoveryScore ?? null;
   const recScoreColor = recoveryScore !== null ? scoreColor(recoveryScore) : Colors.textPrimary;
-  const debtColor = debtHours <= 0 ? Colors.green : debtHours <= 3 ? Colors.gold : Colors.red;
-  const debtLabel = debtHours <= 0 ? `+${Math.abs(debtHours).toFixed(1)}h` : `${debtHours.toFixed(1)}h OWED`;
   const stepPct = stepGoal > 0 ? Math.min(steps / stepGoal, 1) : 0;
   const stepColor = stepPct >= 1 ? Colors.green : stepPct >= 0.5 ? Colors.gold : Colors.info;
   const waterPct = waterGoal > 0 ? Math.min(waterIntake / waterGoal, 1) : 0;
@@ -147,6 +156,24 @@ export default function HomeScreen() {
   const [showSetupModal, setShowSetupModal] = useState(false);
   const [, forceRender] = useState(0);
   const [liveAudioType, setLiveAudioType] = useState<AudioEvent['type']>('quiet');
+
+  // ── Tonight's Target modal ───────────────────────────────────────────────
+  const [showTargetModal, setShowTargetModal] = useState(false);
+  const [targetDuration, setTargetDuration] = useState('');
+  const [targetIntensity, setTargetIntensity] = useState<'easy' | 'moderate' | 'hard'>('moderate');
+  const [customTarget, setCustomTarget] = useState<number | null>(null);
+  const [customTargetDate, setCustomTargetDate] = useState<string | null>(null);
+
+  // Reset target if it was calculated on a previous day
+  const todayDateStr = new Date().toISOString().slice(0, 10);
+  const effectiveTarget = customTargetDate === todayDateStr ? customTarget : null;
+
+  function calcCustomTarget(minutes: number, intensity: 'easy' | 'moderate' | 'hard'): number {
+    const factors = { easy: 0.25, moderate: 0.5, hard: 0.75 };
+    // Base 8h assumes 10,000-step baseline; cap at 9h30m (9.5h)
+    const addition = (minutes / 30) * factors[intensity];
+    return parseFloat(Math.min(Math.max(8.0 + addition, 7.5), 9.5).toFixed(2));
+  }
   const isTracking = !!activeSession;
   const prevHistoryLen = useRef(history.length);
 
@@ -170,10 +197,25 @@ export default function HomeScreen() {
     });
   }
 
-  // Fire on focus — force re-render and apply missed day decay
+  // Fire on focus — force re-render, apply missed day decay, sync widget
   useFocusEffect(useCallback(() => {
     forceRender((n) => n + 1);
-    applyMissedDayDecay();
+    // Don't decay while actively tracking — session end will set lastTrackedDate = today
+    if (!activeSession) applyMissedDayDecay();
+    // Read fresh store state AFTER decay so widget always reflects current level/streak
+    const s = useCocoStore.getState();
+    void syncWidgetState({
+      recoveryScore: latestSession?.recovery.recoveryScore ?? null,
+      streak: s.streak,
+      tierName: getTierForLevel(s.tier).name,
+      mood: s.mood,
+      isTracking: false,
+      bedtimeTime: coachSettings.bedtimeReminderTime,
+      wakeTime: coachSettings.wakeTime,
+      cocoLevel: scoreToCocoLevel(latestSession?.recovery.recoveryScore ?? 0),
+      cocoLevelNum: s.cocoLevel,
+      growthImageName: levelToGrowthImageName(s.cocoLevel),
+    });
     // Enforce screen time block if we're inside the sleep window (only if authorized)
     if (coachSettings.screenTimeEnabled && screenTimeAuthorized && ScreenTimeManager.isAvailable) {
       const bed  = parseTimeHM(coachSettings.bedtimeReminderTime ?? '22:30');
@@ -441,25 +483,22 @@ export default function HomeScreen() {
     if (evolution.leveledUp) triggerLevelUpCelebration(evolution.newLevel);
     const growth = streakToGrowthStage(streak + 1);
     if (evolution.tieredUp) Alert.alert('COCO EVOLVED', `Coco reached ${evolution.tierName}.\nKeep the streak going to unlock ${growth.name}.`);
+    // Use evolution.newLevel (the post-session level) so the widget matches the app hero.
     void syncWidgetState({
       recoveryScore: processed.recovery.recoveryScore, streak,
       tierName: getTierForLevel(evolution.newTier ?? tier).name, mood, isTracking: false,
       bedtimeTime: coachSettings.bedtimeReminderTime, wakeTime: coachSettings.wakeTime,
       cocoLevel: scoreToCocoLevel(processed.recovery.recoveryScore),
-      cocoLevelNum: cocoLevel,
-      growthImageName,
+      cocoLevelNum: evolution.newLevel,
+      growthImageName: levelToGrowthImageName(evolution.newLevel),
     });
   }
 
-  // Coco growth image — used in both hero and level-up modal
-  const cocoGrowth   = streakToGrowthStage(streak);
-  const cocoGrowthPct = cocoGrowth.nextAt !== null
-    ? Math.round(((streak - cocoGrowth.minStreak) / (cocoGrowth.nextAt - cocoGrowth.minStreak)) * 100)
-    : 100;
-  const cocoSubIdx = cocoGrowthPct >= 67 ? 2 : cocoGrowthPct >= 34 ? 1 : 0;
-  const cocoSubImg = GROWTH_STAGE_IMAGES[cocoGrowth.stage][cocoSubIdx];
-  // Exact asset name sent to widget so it always matches the app hero
-  const growthImageName = `growth_${cocoGrowth.stage}_${cocoSubIdx + 1}`;
+  // Coco hero image — strictly tied to cocoLevel (not streak).
+  const lvlImgIdx  = Math.min(cocoLevel - 1, LEVEL_IMAGE_MAP.length - 1);
+  const [cocoImgStage, cocoImgSub] = LEVEL_IMAGE_MAP[lvlImgIdx];
+  const cocoSubImg = GROWTH_STAGE_IMAGES[cocoImgStage as keyof typeof GROWTH_STAGE_IMAGES][cocoImgSub];
+  const growthImageName = levelToGrowthImageName(cocoLevel);
 
   const watchConnected = watchStatus === 'authorized';
   const totalNights  = history.length;
@@ -667,12 +706,18 @@ export default function HomeScreen() {
 
             <View style={styles.reTargetBlock}>
               <Text style={styles.reBlockLabel}>TONIGHT'S TARGET</Text>
-              <Text style={styles.reTargetNum}>{formatTargetHours(sleepTarget)}</Text>
-              <Text style={styles.reTargetSub}>
-                {todayWorkout && todayWorkout.type !== 'rest'
-                  ? `+${formatTargetHours(todayWorkout.load / 300)} workout`
-                  : 'base target'}
-              </Text>
+              {effectiveTarget !== null ? (
+                <>
+                  <Text style={styles.reTargetNum}>{formatTargetHours(effectiveTarget)}</Text>
+                  <TouchableOpacity onPress={() => setShowTargetModal(true)} activeOpacity={0.7}>
+                    <Text style={styles.reTargetSub}>tap to recalculate ›</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <TouchableOpacity style={styles.reTargetCalcBtn} onPress={() => setShowTargetModal(true)} activeOpacity={0.75}>
+                  <Text style={styles.reTargetCalcBtnText}>CALCULATE</Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
 
@@ -685,9 +730,6 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Workout Logger */}
-        <WorkoutLogger />
-
         {recoveryScore === null && (
           <View style={styles.noDataCard}>
             <DiagonalStripes opacity={0.04} />
@@ -697,18 +739,6 @@ export default function HomeScreen() {
             </View>
           </View>
         )}
-
-        {/* Streak + Debt */}
-        <View style={styles.statsRow}>
-          <View style={[styles.statCard, { borderLeftColor: Colors.gold }]}>
-            <Text style={styles.statLabel}>STREAK</Text>
-            <Text style={[styles.statValue, { color: Colors.gold }]}>{streak} {streak === 1 ? 'NIGHT' : 'NIGHTS'}</Text>
-          </View>
-          <View style={[styles.statCard, { borderLeftColor: debtColor }]}>
-            <Text style={styles.statLabel}>SLEEP DEBT</Text>
-            <Text style={[styles.statValue, { color: debtColor }]}>{debtLabel}</Text>
-          </View>
-        </View>
 
         {/* Activity */}
         <Text style={styles.sectionEyebrow}>// TODAY'S ACTIVITY</Text>
@@ -770,6 +800,71 @@ export default function HomeScreen() {
           onStart={handleStartTracking}
           onClose={() => setShowSetupModal(false)}
         />
+      </Modal>
+
+      {/* ── Tonight's Target input modal ── */}
+      <Modal visible={showTargetModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowTargetModal(false)}>
+        <View style={styles.targetModalContainer}>
+          <View style={styles.targetModalHeader}>
+            <Text style={styles.targetModalEyebrow}>// TONIGHT'S TARGET</Text>
+            <TouchableOpacity onPress={() => setShowTargetModal(false)} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+              <Text style={styles.targetModalClose}>✕</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.targetModalSub}>
+            Baseline includes 10,000 steps. Enter today's workout to personalise your sleep target.
+          </Text>
+
+          <Text style={styles.targetInputLabel}>WORKOUT DURATION</Text>
+          <View style={styles.targetDurationRow}>
+            <TextInput
+              style={styles.targetDurationInput}
+              value={targetDuration}
+              onChangeText={(v: string) => setTargetDuration(v.replace(/[^0-9]/g, ''))}
+              keyboardType="number-pad"
+              placeholder="0"
+              placeholderTextColor={Colors.textMuted}
+              maxLength={3}
+            />
+            <Text style={styles.targetDurationUnit}>MIN</Text>
+          </View>
+
+          <Text style={styles.targetInputLabel}>INTENSITY</Text>
+          <View style={styles.targetIntensityRow}>
+            {(['easy', 'moderate', 'hard'] as const).map((lvl) => (
+              <TouchableOpacity
+                key={lvl}
+                style={[styles.targetIntensityBtn, targetIntensity === lvl && styles.targetIntensityBtnActive]}
+                onPress={() => setTargetIntensity(lvl)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.targetIntensityLabel, targetIntensity === lvl && styles.targetIntensityLabelActive]}>
+                  {lvl.toUpperCase()}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <TouchableOpacity
+            style={styles.targetCalcBtn}
+            activeOpacity={0.85}
+            onPress={() => {
+              const mins = parseInt(targetDuration || '0', 10);
+              setCustomTarget(calcCustomTarget(mins, targetIntensity));
+              setCustomTargetDate(new Date().toISOString().slice(0, 10));
+              setShowTargetModal(false);
+            }}
+          >
+            <Text style={styles.targetCalcBtnText}>CALCULATE →</Text>
+          </TouchableOpacity>
+
+          {effectiveTarget !== null && (
+            <View style={styles.targetResultRow}>
+              <Text style={styles.targetResultLabel}>RECOMMENDED</Text>
+              <Text style={styles.targetResultNum}>{formatTargetHours(effectiveTarget)}</Text>
+            </View>
+          )}
+        </View>
       </Modal>
 
       {/* ── Level-up blocking modal — user can't interact until animation finishes ── */}
@@ -1131,6 +1226,13 @@ const styles = StyleSheet.create({
   reTargetSub: {
     fontSize: 9, color: Colors.textMuted, marginTop: 3,
   },
+  reTargetCalcBtn: {
+    marginTop: 6, paddingHorizontal: 12, paddingVertical: 7,
+    borderWidth: 1.5, borderColor: Colors.red, alignSelf: 'flex-start',
+  },
+  reTargetCalcBtnText: {
+    fontSize: 10, fontWeight: '900', fontStyle: 'italic', letterSpacing: 1, color: Colors.red,
+  },
   reBalanceRow: { paddingHorizontal: 16, paddingBottom: 14 },
   reBalanceTrack: {
     height: 4, backgroundColor: Colors.border, overflow: 'hidden', marginBottom: 6,
@@ -1320,4 +1422,66 @@ const styles = StyleSheet.create({
   clipTime: { fontSize: 9, color: Colors.textMuted, marginTop: 2 },
   clipPlayBtn: { width: 32, height: 32, borderWidth: 1.5, borderColor: Colors.border, alignItems: 'center', justifyContent: 'center' },
   clipPlayText: { fontSize: 11, fontWeight: '900' },
+
+  // Tonight's Target modal
+  targetModalContainer: {
+    flex: 1, backgroundColor: Colors.bgDeep, padding: 24, paddingTop: 32,
+  },
+  targetModalHeader: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10,
+  },
+  targetModalEyebrow: {
+    fontSize: 11, fontWeight: '900', fontStyle: 'italic', letterSpacing: 3, color: Colors.red,
+  },
+  targetModalClose: {
+    fontSize: 16, fontWeight: '700', color: Colors.textMuted,
+  },
+  targetModalSub: {
+    fontSize: 13, color: Colors.textSecondary, lineHeight: 19, marginBottom: 28,
+  },
+  targetInputLabel: {
+    fontSize: 9, fontWeight: '900', letterSpacing: 2, color: Colors.textMuted, marginBottom: 8,
+  },
+  targetDurationRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 24,
+  },
+  targetDurationInput: {
+    width: 90, height: 52, backgroundColor: '#1c1c1e', borderWidth: 1, borderColor: Colors.border,
+    borderRadius: 8, color: Colors.textPrimary, fontSize: 26, fontWeight: '900', fontStyle: 'italic',
+    textAlign: 'center',
+  },
+  targetDurationUnit: {
+    fontSize: 13, fontWeight: '900', letterSpacing: 2, color: Colors.textMuted,
+  },
+  targetIntensityRow: {
+    flexDirection: 'row', gap: 10, marginBottom: 32,
+  },
+  targetIntensityBtn: {
+    flex: 1, paddingVertical: 12, borderWidth: 1.5, borderColor: Colors.border,
+    borderRadius: 6, alignItems: 'center',
+  },
+  targetIntensityBtnActive: {
+    borderColor: Colors.red, backgroundColor: Colors.red + '22',
+  },
+  targetIntensityLabel: {
+    fontSize: 11, fontWeight: '900', fontStyle: 'italic', letterSpacing: 1, color: Colors.textMuted,
+  },
+  targetIntensityLabelActive: {
+    color: Colors.red,
+  },
+  targetCalcBtn: {
+    backgroundColor: Colors.red, paddingVertical: 16, alignItems: 'center',
+  },
+  targetCalcBtnText: {
+    fontSize: 13, fontWeight: '900', fontStyle: 'italic', letterSpacing: 1, color: '#fff',
+  },
+  targetResultRow: {
+    marginTop: 28, alignItems: 'center', gap: 4,
+  },
+  targetResultLabel: {
+    fontSize: 9, fontWeight: '900', letterSpacing: 3, color: Colors.textMuted,
+  },
+  targetResultNum: {
+    fontSize: 48, fontWeight: '900', fontStyle: 'italic', color: Colors.textPrimary,
+  },
 });

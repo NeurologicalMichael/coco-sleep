@@ -11,7 +11,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system';
 
-const AUTO_DELETE_DAYS = 7;
+const AUTO_DELETE_DAYS = 3;
 
 export type ClipType = 'snoring' | 'talking' | 'loud_event';
 

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ScrollView, View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useAudioPlayer } from 'expo-audio';
+import { useAudioPlayer, useAudioPlayerStatus, setAudioModeAsync } from 'expo-audio';
 import { Colors } from '../../constants/colors';
 import { DiagonalStripes } from '../../components/DiagonalStripes';
 import { useRecoveryStore, ProcessedSession } from '../../store/recoveryStore';
@@ -37,6 +37,19 @@ function formatDate(dateStr: string) {
   const MONTHS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
   const DAYS   = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
   return `${DAYS[d.getDay()]} ${MONTHS[d.getMonth()]} ${d.getDate()}`;
+}
+
+// ─── Audio classification ─────────────────────────────────────────────────────
+// Stub: derives label from the clip's existing type field.
+// Upgrade path: replace with TFLite / CoreML inference on MFCC features
+// extracted from clip.filePath (e.g. using expo-file-system + a bundled model).
+function classifyClip(clip: SoundClip): string {
+  switch (clip.type) {
+    case 'snoring':    return 'Snoring';
+    case 'talking':    return 'Sleep Talking';
+    case 'loud_event': return 'Loud Noise';
+    default:           return 'Sound Event';
+  }
 }
 
 // ─── Bucket helpers ────────────────────────────────────────────────────────────
@@ -287,6 +300,78 @@ const histSt = StyleSheet.create({
   chipLockedPro: { fontSize: 8, fontWeight: '900', color: Colors.gold, marginTop: 2 },
 });
 
+// ─── Sound Category Dropdown ─────────────────────────────────────────────────
+
+const SOUND_CATEGORIES: { type: AudioEvent['type']; icon: string; label: string; color: string }[] = [
+  { type: 'snoring',    icon: '😴', label: 'SNORING',       color: Colors.gold },
+  { type: 'talking',    icon: '💬', label: 'SLEEP TALKING', color: Colors.info },
+  { type: 'loud_event', icon: '💥', label: 'LOUD SOUND',    color: Colors.red  },
+];
+
+function SoundCategoryDropdown({ audioEvents }: { audioEvents: AudioEvent[] }) {
+  const nonQuiet = audioEvents.filter((e) => e.type !== 'quiet');
+  const [openCategory, setOpenCategory] = useState<AudioEvent['type'] | null>(null);
+
+  if (nonQuiet.length === 0) {
+    return (
+      <View style={sdSt.emptyCard}>
+        <Text style={sdSt.emptyText}>No sounds detected this night</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={sdSt.container}>
+      {SOUND_CATEGORIES.map(({ type, icon, label, color }) => {
+        const events = nonQuiet.filter((e) => e.type === type);
+        if (events.length === 0) return null;
+        const open = openCategory === type;
+        return (
+          <View key={type} style={[sdSt.row, { borderLeftColor: color }]}>
+            <TouchableOpacity
+              style={sdSt.rowHeader}
+              onPress={() => setOpenCategory(open ? null : type)}
+              activeOpacity={0.7}
+            >
+              <Text style={sdSt.rowIcon}>{icon}</Text>
+              <Text style={[sdSt.rowLabel, { color }]}>{label}</Text>
+              <Text style={[sdSt.rowCount, { color }]}>{events.length}×</Text>
+              <Text style={sdSt.rowArrow}>{open ? '↑' : '↓'}</Text>
+            </TouchableOpacity>
+            {open && (
+              <View style={sdSt.eventList}>
+                {events.map((e, i) => <ClipRow key={i} event={e} />)}
+              </View>
+            )}
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+const sdSt = StyleSheet.create({
+  container: { marginBottom: 10 },
+  emptyCard: {
+    backgroundColor: Colors.bgCard, borderWidth: 1, borderColor: Colors.border,
+    padding: 14, marginBottom: 10,
+  },
+  emptyText: { fontSize: 11, color: Colors.textMuted, fontStyle: 'italic' },
+  row: {
+    backgroundColor: Colors.bgCard, borderWidth: 1, borderColor: Colors.border,
+    borderLeftWidth: 4, marginBottom: 6, overflow: 'hidden',
+  },
+  rowHeader: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingHorizontal: 14, paddingVertical: 12,
+  },
+  rowIcon:    { fontSize: 16 },
+  rowLabel:   { flex: 1, fontSize: 10, fontWeight: '900', fontStyle: 'italic', letterSpacing: 1.5 },
+  rowCount:   { fontSize: 13, fontWeight: '900' },
+  rowArrow:   { fontSize: 10, fontWeight: '900', color: Colors.textMuted, marginLeft: 8 },
+  eventList:  { borderTopWidth: 1, borderTopColor: Colors.border, padding: 8, gap: 6 },
+});
+
 // ─── Night Panel ──────────────────────────────────────────────────────────────
 
 function NightPanel({ session, isPremium }: { session: ProcessedSession; isPremium: boolean }) {
@@ -306,10 +391,6 @@ function NightPanel({ session, isPremium }: { session: ProcessedSession; isPremi
 
   // Sound events
   const audioEvents = session.audioEvents ?? [];
-  const nonQuiet    = audioEvents.filter((e) => e.type !== 'quiet');
-  const soundCounts = {} as Record<AudioEvent['type'], number>;
-  for (const e of nonQuiet) soundCounts[e.type] = (soundCounts[e.type] ?? 0) + 1;
-  const clips = nonQuiet.filter((e) => e.clipUri);
 
   return (
     <View style={npSt.container}>
@@ -409,33 +490,9 @@ function NightPanel({ session, isPremium }: { session: ProcessedSession; isPremi
         <View style={npSt.emptyBlock}><Text style={npSt.emptyText}>No stage data</Text></View>
       )}
 
-      {/* Sleep sounds — ALWAYS shown */}
+      {/* Sleep sounds — collapsible category dropdown */}
       <Text style={npSt.sectionEyebrow}>// SLEEP SOUNDS</Text>
-      <View style={npSt.soundsCard}>
-        {nonQuiet.length === 0 ? (
-          <Text style={npSt.soundsEmpty}>No sounds detected this night</Text>
-        ) : (
-          <View style={npSt.soundsRow}>
-            {(['snoring', 'talking', 'loud_event'] as AudioEvent['type'][]).map((t) =>
-              soundCounts[t] > 0 ? (
-                <View key={t} style={npSt.soundChip}>
-                  <Text style={npSt.soundChipIcon}>{audioTypeIcon(t)}</Text>
-                  <Text style={npSt.soundChipLabel}>{audioTypeLabel(t)}</Text>
-                  <Text style={npSt.soundChipCount}>{soundCounts[t]}×</Text>
-                </View>
-              ) : null
-            )}
-          </View>
-        )}
-      </View>
-
-      {/* Recorded clips with live playback */}
-      {clips.length > 0 && (
-        <>
-          <Text style={npSt.sectionEyebrow}>// RECORDED CLIPS</Text>
-          {clips.map((e, i) => <ClipRow key={i} event={e} />)}
-        </>
-      )}
+      <SoundCategoryDropdown audioEvents={audioEvents} />
 
       <View style={{ height: 24 }} />
     </View>
@@ -471,30 +528,29 @@ const npSt = StyleSheet.create({
   sectionEyebrow: { fontSize: 9, fontWeight: '900', fontStyle: 'italic', letterSpacing: 3, color: Colors.textMuted, marginTop: 20, marginBottom: 10 },
   emptyBlock: { backgroundColor: Colors.bgCard, borderWidth: 1, borderColor: Colors.border, padding: 18, alignItems: 'center', marginBottom: 10 },
   emptyText: { fontSize: 11, color: Colors.textMuted, fontStyle: 'italic' },
-  soundsCard: { backgroundColor: Colors.bgCard, borderWidth: 1, borderColor: Colors.border, borderLeftWidth: 4, borderLeftColor: '#A855F7', padding: 12, marginBottom: 10 },
-  soundsEmpty: { fontSize: 11, color: Colors.textMuted, fontStyle: 'italic' },
-  soundsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  soundChip: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: Colors.bgDeep, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 8, paddingVertical: 5 },
-  soundChipIcon: { fontSize: 12 },
-  soundChipLabel: { fontSize: 9, fontWeight: '900', fontStyle: 'italic', color: Colors.textSecondary },
-  soundChipCount: { fontSize: 9, fontWeight: '900', color: Colors.textMuted },
 });
 
 // ─── Clip Row ─────────────────────────────────────────────────────────────────
 
 function ClipRow({ event }: { event: AudioEvent }) {
-  const player  = useAudioPlayer(event.clipUri ? { uri: event.clipUri } : null as any);
-  const [playing, setPlaying] = useState(false);
+  const player = useAudioPlayer(event.clipUri ? { uri: event.clipUri } : null as any);
+  const status = useAudioPlayerStatus(player);
 
   const typeColor =
     event.type === 'snoring'    ? Colors.gold :
     event.type === 'talking'    ? Colors.info :
     event.type === 'loud_event' ? Colors.red  : Colors.textMuted;
 
-  function toggle() {
+  async function toggle() {
     if (!event.clipUri) return;
-    if (playing) { player.pause(); setPlaying(false); }
-    else { player.seekTo(0); player.play(); setPlaying(true); }
+    if (status.playing) {
+      player.pause();
+    } else {
+      // Switch audio session to playback mode so clips are audible
+      await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false });
+      player.seekTo(0);
+      player.play();
+    }
   }
 
   return (
@@ -505,8 +561,8 @@ function ClipRow({ event }: { event: AudioEvent }) {
         <Text style={clipSt.time}>{formatClockTime(event.timestamp)}</Text>
       </View>
       {event.clipUri && (
-        <TouchableOpacity onPress={toggle} style={[clipSt.playBtn, playing && { borderColor: typeColor }]}>
-          <Text style={[clipSt.playText, { color: typeColor }]}>{playing ? '■' : '▶'}</Text>
+        <TouchableOpacity onPress={() => void toggle()} style={[clipSt.playBtn, status.playing && { borderColor: typeColor }]}>
+          <Text style={[clipSt.playText, { color: typeColor }]}>{status.playing ? '■' : '▶'}</Text>
         </TouchableOpacity>
       )}
     </View>
@@ -530,15 +586,26 @@ function SoundClipRow({ clip, onToggleSave, onDelete }: {
   onDelete: () => void;
 }) {
   const player = useAudioPlayer({ uri: clip.filePath });
-  const [playing, setPlaying] = useState(false);
+  const status = useAudioPlayerStatus(player);
+  const { renameClip } = useSoundClipsStore();
+
+  // Auto-classify: assign a label on first render if none set yet
+  useEffect(() => {
+    if (!clip.label) renameClip(clip.id, classifyClip(clip));
+  }, [clip.id]);
 
   const typeColor =
     clip.type === 'snoring'    ? Colors.gold  :
     clip.type === 'talking'    ? Colors.info  : Colors.red;
 
-  function toggle() {
-    if (playing) { player.pause(); setPlaying(false); }
-    else         { player.seekTo(0); player.play(); setPlaying(true); }
+  async function toggle() {
+    if (status.playing) {
+      player.pause();
+    } else {
+      await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false });
+      player.seekTo(0);
+      player.play();
+    }
   }
 
   return (
@@ -553,9 +620,9 @@ function SoundClipRow({ clip, onToggleSave, onDelete }: {
         </Text>
       </View>
       <View style={scRowSt.actions}>
-        <TouchableOpacity onPress={toggle}
-          style={[scRowSt.playBtn, playing && { borderColor: typeColor }]}>
-          <Text style={[scRowSt.playText, { color: typeColor }]}>{playing ? '■' : '▶'}</Text>
+        <TouchableOpacity onPress={() => void toggle()}
+          style={[scRowSt.playBtn, status.playing && { borderColor: typeColor }]}>
+          <Text style={[scRowSt.playText, { color: typeColor }]}>{status.playing ? '■' : '▶'}</Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={onToggleSave} style={scRowSt.starBtn}>
           <Text style={{ fontSize: 14, color: clip.saved ? Colors.gold : Colors.textMuted }}>
@@ -689,6 +756,35 @@ const nsSt = StyleSheet.create({
   countRow: { fontSize: 10, fontWeight: '700', color: Colors.textMuted, letterSpacing: 1, marginBottom: 10 },
 });
 
+// ─── Starred Sounds Section ───────────────────────────────────────────────────
+
+function StarredSoundsSection() {
+  const { clips, saveClip, unsaveClip, deleteClip } = useSoundClipsStore();
+  const starred = clips.filter((c) => c.saved).sort((a, b) => b.timestamp - a.timestamp);
+
+  if (starred.length === 0) return null;
+
+  return (
+    <View style={{ marginBottom: 32 }}>
+      <Text style={starSt.eyebrow}>// ★ STARRED SOUNDS</Text>
+      <Text style={starSt.sub}>Permanently saved — never auto-deleted.</Text>
+      {starred.map((clip) => (
+        <SoundClipRow
+          key={clip.id}
+          clip={clip}
+          onToggleSave={() => clip.saved ? unsaveClip(clip.id) : saveClip(clip.id)}
+          onDelete={() => void deleteClip(clip.id)}
+        />
+      ))}
+    </View>
+  );
+}
+
+const starSt = StyleSheet.create({
+  eyebrow: { fontSize: 9, fontWeight: '900', fontStyle: 'italic', letterSpacing: 3, color: Colors.gold, marginBottom: 4 },
+  sub: { fontSize: 10, color: Colors.textMuted, marginBottom: 12 },
+});
+
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
 export default function ReportScreen() {
@@ -698,26 +794,29 @@ export default function ReportScreen() {
   if (history.length === 0) {
     return (
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-        <Text style={styles.sectionLabel}>// NIGHT SOUNDS</Text>
-        <NightSoundsSection />
         <View style={styles.emptyFull}>
           <Text style={styles.emptyTitle}>NO SLEEP DATA.</Text>
           <View style={styles.emptyBar} />
           <Text style={styles.emptySub}>Complete a sleep session to see your stats.</Text>
         </View>
+        <Text style={styles.sectionLabel}>// NIGHT SOUNDS</Text>
+        <NightSoundsSection />
+        <StarredSoundsSection />
       </ScrollView>
     );
   }
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.sectionLabel}>// NIGHT SOUNDS</Text>
-      <NightSoundsSection />
-
       <Text style={styles.sectionLabel}>// SLEEP STATS</Text>
       <AveragesSection history={history} />
 
       <NightHistoryBrowser history={history} isPremium={isPremium} />
+
+      <Text style={styles.sectionLabel}>// NIGHT SOUNDS</Text>
+      <NightSoundsSection />
+
+      <StarredSoundsSection />
 
       <View style={{ height: 40 }} />
     </ScrollView>

@@ -30,18 +30,21 @@ private func readDefaults() -> CocoEntry {
 
     let levelNum = intVal("cocoLevelNum")
     let streak = intVal("streak")
-    // Use the exact image name written by the JS side; fall back to streak-based calculation
-    let savedImageName = strVal("growthImageName")
+    // Strip any JSON-encoded quotes the RN library may have added (e.g. "\"growth_seed_1\"")
+    let rawImageName = strVal("growthImageName")
+    let savedImageName = rawImageName.trimmingCharacters(in: CharacterSet(charactersIn: "\""))
     let resolvedImageName: String
-    if savedImageName.isEmpty {
-        // Fallback: compute from streak (sub-image _1 is safest default)
-        if streak >= 21 { resolvedImageName = "growth_legendary_1" }
-        else if streak >= 11 { resolvedImageName = "growth_mature_1" }
-        else if streak >= 6  { resolvedImageName = "growth_growing_1" }
-        else if streak >= 3  { resolvedImageName = "growth_baby_1" }
-        else { resolvedImageName = "growth_seed_1" }
-    } else {
+    if !savedImageName.isEmpty {
         resolvedImageName = savedImageName
+    } else {
+        // Fallback: derive from cocoLevelNum — same mapping as JS LEVEL_IMAGE_MAP.
+        // DO NOT use streak here; streak and level are independent values.
+        let stages = ["seed","seed","seed","baby","baby","baby",
+                      "growing","growing","growing","mature","mature","mature",
+                      "legendary","legendary","legendary"]
+        let subs   = [1,2,3, 1,2,3, 1,2,3, 1,2,3, 1,2,3]
+        let idx    = max(0, min(levelNum - 1, stages.count - 1))
+        resolvedImageName = "growth_\(stages[idx])_\(subs[idx])"
     }
     return CocoEntry(
         date: Date(),

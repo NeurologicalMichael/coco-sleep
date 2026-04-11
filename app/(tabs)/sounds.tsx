@@ -147,7 +147,7 @@ function ThinkingBubble({ bounceVal }: { bounceVal: Animated.Value }) {
         resizeMode="contain"
       />
       <View style={[bub.bubble, bub.thinkingBubble]}>
-        <View style={[bub.tail, { top: 10 }]} />
+        <View style={bub.tail} />
         <ActivityIndicator size="small" color={Colors.red} />
       </View>
     </View>
@@ -205,8 +205,9 @@ const bub = StyleSheet.create({
   },
 
   // Rotated square tail — inside bubble, same color, half protrudes left.
-  // top: 18 is safely past the borderRadius:20 corner curve on all bubble sizes,
-  // so it never gets clipped regardless of paddingVertical.
+  // top:'50%' + translateY centers the tail on the bubble for any height,
+  // always past the borderRadius:20 corner zone (requires bubble height > 40px,
+  // guaranteed by minHeight on thinkingBubble and by text lineHeight on text bubbles).
   tail: {
     position: 'absolute',
     width: TAIL_BOX,
@@ -214,13 +215,16 @@ const bub = StyleSheet.create({
     backgroundColor: BUBBLE_COLOR,
     borderRadius: 2,
     left: -(TAIL_BOX / 2) + 1,
-    top: 18,
-    transform: [{ rotate: '45deg' }],
+    top: '50%',
+    transform: [{ translateY: -(TAIL_BOX / 2) }, { rotate: '45deg' }],
   },
 
   thinkingBubble: {
     paddingVertical: 13,
     paddingHorizontal: 18,
+    minHeight: 46,        // ensures top:'50%' on tail = 23px > borderRadius:20 corner zone
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   text: {
@@ -572,7 +576,7 @@ const sc = StyleSheet.create({
     backgroundColor: BUBBLE_COLOR,
     borderRadius: 2,
     left: -(TAIL_BOX / 2) + 1,
-    top: 18,
+    top: 18,  // fixed — greetingBubble uses flex:1 so '%' would float to mid-screen
     transform: [{ rotate: '45deg' }],
   },
   greetingText: {
