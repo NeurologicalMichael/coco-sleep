@@ -811,6 +811,11 @@ export default function ReportScreen() {
       <Text style={styles.sectionLabel}>// SLEEP STATS</Text>
       <AveragesSection history={history} />
 
+      <TouchableOpacity style={styles.savedSoundsBtn} onPress={() => router.push('/saved-sounds')} activeOpacity={0.75}>
+        <Text style={styles.savedSoundsBtnText}>★  SAVED SOUNDS</Text>
+        <Text style={styles.savedSoundsBtnArrow}>→</Text>
+      </TouchableOpacity>
+
       <NightHistoryBrowser history={history} isPremium={isPremium} />
 
       <Text style={styles.sectionLabel}>// NIGHT SOUNDS</Text>
@@ -835,4 +840,12 @@ const styles = StyleSheet.create({
   emptyBar: { height: 3, width: 40, backgroundColor: Colors.red, marginBottom: 16 },
   emptySub: { fontSize: 14, color: Colors.textSecondary, textAlign: 'center', lineHeight: 22 },
   sectionLabel: { fontSize: 9, fontWeight: '900', fontStyle: 'italic', letterSpacing: 3, color: Colors.red, marginBottom: 14 },
+  savedSoundsBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: Colors.bgCard, borderWidth: 1, borderColor: Colors.gold,
+    borderLeftWidth: 4, borderLeftColor: Colors.gold,
+    paddingHorizontal: 16, paddingVertical: 14, marginBottom: 24,
+  },
+  savedSoundsBtnText: { fontSize: 11, fontWeight: '900', fontStyle: 'italic', letterSpacing: 2, color: Colors.gold },
+  savedSoundsBtnArrow: { fontSize: 16, fontWeight: '900', color: Colors.gold },
 });

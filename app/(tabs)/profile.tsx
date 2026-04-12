@@ -16,7 +16,6 @@ import { Colors } from '../../constants/colors';
 import { DiagonalStripes } from '../../components/DiagonalStripes';
 import { useCocoStore } from '../../store/cocoStore';
 import { useRecoveryStore } from '../../store/recoveryStore';
-import { TIERS, getTierForLevel } from '../../constants/tiers';
 import { useSleepCoach } from '../../hooks/useSleepCoach';
 import { ScreenTimeManager } from '../../modules/ScreenTimeManager';
 import { useCoachStore } from '../../store/coachStore';
@@ -27,14 +26,13 @@ import { useUserProfileStore } from '../../store/userProfileStore';
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { tier } = useCocoStore();
+  const { } = useCocoStore();
   const { history } = useRecoveryStore();
   const { isPremium, isTrialing } = usePurchaseStore();
   const { userId, username } = useAuthStore();
   const { profilePictureUri, setProfile } = useUserProfileStore();
   const [promoCode, setPromoCode] = useState('');
   const [redeeming, setRedeeming] = useState(false);
-  const currentTier = getTierForLevel(tier);
 
   const { settings, updateSettings, notificationsAuthorized, enableCoach, disableCoach } = useSleepCoach();
   const { screenTimeAuthorized, setScreenTimeAuthorized, selectedAppsCount, setSelectedAppsCount } = useCoachStore();
@@ -282,18 +280,6 @@ export default function ProfileScreen() {
           </View>
         </TouchableOpacity>
         {username && <Text style={styles.profileUsername}>@{username}</Text>}
-      </View>
-
-      {/* Tier card */}
-      <View style={[styles.tierOuter, { borderColor: currentTier.color, borderLeftColor: currentTier.color }]}>
-        <DiagonalStripes color={currentTier.color} opacity={0.06} />
-        <View style={styles.tierInner}>
-          <View style={[styles.cocoBlock, { backgroundColor: currentTier.color }]}><Text style={styles.cocoBlockText}>CC</Text></View>
-          <View>
-            <Text style={[styles.tierName, { color: currentTier.color }]}>{currentTier.name.toUpperCase()}</Text>
-            <Text style={styles.tierDesc}>TIER {tier} OF {TIERS.length}</Text>
-          </View>
-        </View>
       </View>
 
       {/* Pro banner */}
@@ -596,16 +582,6 @@ export default function ProfileScreen() {
         </>
       )}
 
-      {/* Tier progression */}
-      <Text style={[styles.sectionLabel, { marginTop: 24 }]}>TIER PROGRESSION</Text>
-      {TIERS.map((t) => (
-        <View key={t.level} style={[styles.tierRow, { borderLeftColor: t.color }, tier >= t.level && styles.tierRowUnlocked]}>
-          <Text style={[styles.tierRowName, { color: tier >= t.level ? t.color : Colors.textMuted }]}>{t.name.toUpperCase()}</Text>
-          <Text style={styles.tierRowReq}>{t.streakRequired}d · {t.avgScoreRequired}+</Text>
-          {tier >= t.level && <Text style={styles.check}>✓</Text>}
-        </View>
-      ))}
-
       {/* History */}
       {history.length > 0 && (
         <>
@@ -756,18 +732,6 @@ const styles = StyleSheet.create({
   title: { fontSize: 52, fontWeight: '900', fontStyle: 'italic', color: Colors.textPrimary, lineHeight: 54 },
   titleUnderline: { height: 3, width: 60, backgroundColor: Colors.red, marginTop: 6 },
 
-  tierOuter: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: Colors.bgCard, borderRadius: 0,
-    borderWidth: 1.5, borderLeftWidth: 5, marginBottom: 16, overflow: 'hidden',
-    transform: [{ skewX: '-1.5deg' }],
-  },
-  tierInner: { flexDirection: 'row', alignItems: 'center', gap: 16, padding: 18, transform: [{ skewX: '1.5deg' }] },
-  cocoBlock: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  cocoBlockText: { fontSize: 14, fontWeight: '900', fontStyle: 'italic', color: '#0D0D0D' },
-  tierName: { fontSize: 20, fontWeight: '900', fontStyle: 'italic' },
-  tierDesc: { fontSize: 10, color: Colors.textSecondary, marginTop: 2, fontWeight: '700', letterSpacing: 1 },
-
   proBanner: { backgroundColor: Colors.gold, padding: 10, alignItems: 'center', marginBottom: 16 },
   proBannerText: { fontSize: 10, fontWeight: '900', fontStyle: 'italic', letterSpacing: 2, color: Colors.bgDeep },
   upgradeOuter: {
@@ -849,16 +813,6 @@ const styles = StyleSheet.create({
   alarmDayPillActive: { borderColor: Colors.red, backgroundColor: Colors.redDim },
   alarmDayText: { fontSize: 9, fontWeight: '900', letterSpacing: 1, color: Colors.textMuted },
   alarmDayTextActive: { color: Colors.red },
-
-  tierRow: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.bgCard,
-    borderRadius: 0, padding: 14, marginBottom: 6,
-    borderWidth: 1, borderColor: Colors.border, borderLeftWidth: 4, gap: 12,
-  },
-  tierRowUnlocked: { backgroundColor: Colors.bgCardAlt },
-  tierRowName: { fontSize: 12, fontWeight: '900', fontStyle: 'italic', flex: 1 },
-  tierRowReq: { fontSize: 9, color: Colors.textMuted, fontWeight: '700' },
-  check: { fontSize: 13, color: Colors.green },
 
   historyRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Colors.border, gap: 8 },
   historyCocoImg: { width: 36, height: 36 },
