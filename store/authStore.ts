@@ -6,12 +6,14 @@ import { supabase } from '../constants/supabase';
 interface AuthStore {
   userId: string | null;
   username: string | null;
+  avatarUrl: string | null;
   isAuthenticated: boolean;
   isAnonymous: boolean;
   loadSession: () => Promise<void>;
   signIn: (username: string, workoutDays: number, workoutIntensity: string) => Promise<void>;
   signOut: () => Promise<void>;
   setUsername: (username: string) => Promise<void>;
+  setAvatarUrl: (url: string) => Promise<void>;
 }
 
 export const useAuthStore = create<AuthStore>()(
@@ -19,6 +21,7 @@ export const useAuthStore = create<AuthStore>()(
     (set, get) => ({
   userId: null,
   username: null,
+  avatarUrl: null,
   isAuthenticated: false,
   isAnonymous: true,
 
@@ -28,8 +31,9 @@ export const useAuthStore = create<AuthStore>()(
       if (session?.user) {
         set({ userId: session.user.id, isAuthenticated: true, isAnonymous: session.user.is_anonymous ?? true });
         // Load username from profiles table
-        const { data: profile } = await supabase.from('profiles').select('username').eq('id', session.user.id).maybeSingle();
+        const { data: profile } = await supabase.from('profiles').select('username, avatar_url').eq('id', session.user.id).maybeSingle();
         if (profile?.username) set({ username: profile.username });
+        if (profile?.avatar_url) set({ avatarUrl: profile.avatar_url });
       } else {
         // No session — sign in anonymously
         const { data, error } = await supabase.auth.signInAnonymously();
@@ -79,11 +83,23 @@ export const useAuthStore = create<AuthStore>()(
       // Non-blocking
     }
   },
+
+  setAvatarUrl: async (url: string) => {
+    set({ avatarUrl: url });
+    try {
+      const { userId } = get();
+      if (userId) {
+        await supabase.from('profiles').upsert({ id: userId, avatar_url: url }, { onConflict: 'id' });
+      }
+    } catch {
+      // Non-blocking
+    }
+  },
     }),
     {
       name: 'auth-store',
       storage: createJSONStorage(() => AsyncStorage),
-      partialize: (state) => ({ userId: state.userId, username: state.username }),
+      partialize: (state) => ({ userId: state.userId, username: state.username, avatarUrl: state.avatarUrl }),
     }
   )
 );

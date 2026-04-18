@@ -1,46 +1,62 @@
-/**
- * RevenueCat integration scaffold.
- *
- * HOW TO ACTIVATE:
- *   1. expo install react-native-purchases
- *   2. Set REVENUECAT_CONFIGURED = true
- *   3. Replace YOUR_REVENUECAT_API_KEY with the key from the RevenueCat dashboard
- *   4. Uncomment each TODO block
- *   5. Create the "coco_pro" entitlement in RevenueCat and attach your App Store products
- */
-
-// import Purchases, { PurchasesPackage } from 'react-native-purchases';
 import { usePurchaseStore } from '../store/purchaseStore';
+import Constants from 'expo-constants';
 
-export const ENTITLEMENT_ID       = 'coco_pro';
-export const OFFERING_ID          = 'default';
-export const REVENUECAT_CONFIGURED = false; // flip to true once SDK is installed
+export type PurchasesPackage = any;
+
+export const ENTITLEMENT_ID = 'Coco Sleep Pro';
+export const OFFERING_ID    = 'default';
+
+const API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_API_KEY ?? '';
+
+// RevenueCat v9 intentionally crashes the app in Expo Go when a test key is detected.
+// Skip the SDK entirely when running inside Expo Go.
+const IS_EXPO_GO = Constants.appOwnership === 'expo';
+
+// Lazy-load the native SDK so the app doesn't crash when the native module
+// hasn't been built yet (e.g. running via Expo Go / Metro without expo run:ios).
+let Purchases: any = null;
+function getSDK(): any | null {
+  if (IS_EXPO_GO) return null;
+  if (Purchases) return Purchases;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    Purchases = require('react-native-purchases').default;
+    return Purchases;
+  } catch {
+    return null;
+  }
+}
 
 // ─── Initialise ───────────────────────────────────────────────────────────────
-// Call once in _layout.tsx after auth, passing the Supabase userId.
 
-export function initRevenueCat(_userId?: string): void {
-  if (!REVENUECAT_CONFIGURED) return;
-  // TODO:
-  // Purchases.configure({ apiKey: 'YOUR_REVENUECAT_API_KEY' });
-  // if (_userId) void Purchases.logIn(_userId);
+export function initRevenueCat(userId?: string): void {
+  const sdk = getSDK();
+  if (!sdk || !API_KEY) return;
+  try {
+    sdk.configure({ apiKey: API_KEY });
+    if (userId) {
+      // logIn returns a Promise in some versions — always discard with a catch
+      const loginResult = sdk.logIn(userId);
+      if (loginResult && typeof loginResult.catch === 'function') {
+        loginResult.catch(() => {});
+      }
+    }
+  } catch { /* no-op */ }
 }
 
 // ─── Sync entitlement → store ─────────────────────────────────────────────────
-// Call on app foreground or after any purchase/restore to refresh status.
 
 export async function syncPremiumStatus(): Promise<boolean> {
-  if (!REVENUECAT_CONFIGURED) return false;
+  const sdk = getSDK();
+  if (!sdk) return false;
   try {
-    // TODO:
-    // const info = await Purchases.getCustomerInfo();
-    // const entitlement = info.entitlements.active[ENTITLEMENT_ID];
-    // const isPremium   = entitlement != null;
-    // const isTrialing  = entitlement?.periodType === 'TRIAL';
-    // const trialEndsAt = entitlement?.expirationDate ?? null;
-    // usePurchaseStore.getState().setPremium(isPremium, isTrialing, trialEndsAt);
-    // return isPremium;
-    return false;
+    const info        = await sdk.getCustomerInfo();
+    const entitlement = info.entitlements.active[ENTITLEMENT_ID];
+    const isPremium   = entitlement != null;
+    const isTrialing  = entitlement?.periodType === 'TRIAL';
+    const trialEndsAt = entitlement?.expirationDate ?? null;
+    usePurchaseStore.getState().setPremium(isPremium, isTrialing, trialEndsAt);
+    return isPremium;
   } catch {
     return false;
   }
@@ -48,13 +64,25 @@ export async function syncPremiumStatus(): Promise<boolean> {
 
 // ─── Offerings ────────────────────────────────────────────────────────────────
 
-export async function getOfferings(): Promise<any[]> {
-  if (!REVENUECAT_CONFIGURED) return [];
+export async function getOfferings(): Promise<PurchasesPackage[]> {
+  const sdk = getSDK();
+  if (!sdk) return [];
   try {
-    // TODO:
-    // const offerings = await Purchases.getOfferings();
-    // return offerings.current?.availablePackages ?? [];
+    const offerings = await sdk.getOfferings();
+    return offerings.current?.availablePackages ?? [];
+  } catch {
     return [];
+  }
+}
+
+export async function getDiscountOfferings(): Promise<PurchasesPackage[]> {
+  const sdk = getSDK();
+  if (!sdk) return [];
+  try {
+    const offerings = await sdk.getOfferings();
+    const discount = offerings.all['discount_offer'];
+    if (discount) return discount.availablePackages.filter((p: any) => p.packageType === 'ANNUAL');
+    return offerings.current?.availablePackages.filter((p: any) => p.packageType === 'ANNUAL') ?? [];
   } catch {
     return [];
   }
@@ -62,18 +90,17 @@ export async function getOfferings(): Promise<any[]> {
 
 // ─── Purchase ─────────────────────────────────────────────────────────────────
 
-export async function purchasePackage(_pkg: any): Promise<boolean> {
-  if (!REVENUECAT_CONFIGURED) return false;
+export async function purchasePackage(pkg: PurchasesPackage): Promise<boolean> {
+  const sdk = getSDK();
+  if (!sdk) return false;
   try {
-    // TODO:
-    // const { customerInfo } = await Purchases.purchasePackage(_pkg);
-    // const entitlement = customerInfo.entitlements.active[ENTITLEMENT_ID];
-    // const isPremium   = entitlement != null;
-    // const isTrialing  = entitlement?.periodType === 'TRIAL';
-    // const trialEndsAt = entitlement?.expirationDate ?? null;
-    // usePurchaseStore.getState().setPremium(isPremium, isTrialing, trialEndsAt);
-    // return isPremium;
-    return false;
+    const { customerInfo } = await sdk.purchasePackage(pkg);
+    const entitlement = customerInfo.entitlements.active[ENTITLEMENT_ID];
+    const isPremium   = entitlement != null;
+    const isTrialing  = entitlement?.periodType === 'TRIAL';
+    const trialEndsAt = entitlement?.expirationDate ?? null;
+    usePurchaseStore.getState().setPremium(isPremium, isTrialing, trialEndsAt);
+    return isPremium;
   } catch {
     return false;
   }
@@ -82,17 +109,16 @@ export async function purchasePackage(_pkg: any): Promise<boolean> {
 // ─── Restore ──────────────────────────────────────────────────────────────────
 
 export async function restorePurchases(): Promise<boolean> {
-  if (!REVENUECAT_CONFIGURED) return false;
+  const sdk = getSDK();
+  if (!sdk) return false;
   try {
-    // TODO:
-    // const info        = await Purchases.restorePurchases();
-    // const entitlement = info.entitlements.active[ENTITLEMENT_ID];
-    // const isPremium   = entitlement != null;
-    // const isTrialing  = entitlement?.periodType === 'TRIAL';
-    // const trialEndsAt = entitlement?.expirationDate ?? null;
-    // usePurchaseStore.getState().setPremium(isPremium, isTrialing, trialEndsAt);
-    // return isPremium;
-    return false;
+    const info        = await sdk.restorePurchases();
+    const entitlement = info.entitlements.active[ENTITLEMENT_ID];
+    const isPremium   = entitlement != null;
+    const isTrialing  = entitlement?.periodType === 'TRIAL';
+    const trialEndsAt = entitlement?.expirationDate ?? null;
+    usePurchaseStore.getState().setPremium(isPremium, isTrialing, trialEndsAt);
+    return isPremium;
   } catch {
     return false;
   }

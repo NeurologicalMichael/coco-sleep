@@ -64,6 +64,13 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="feed"
+        options={{
+          title: 'Feed',
+          tabBarIcon: ({ focused }) => tabIcon(focused, 'newspaper', 'newspaper-outline'),
+        }}
+      />
+      <Tabs.Screen
         name="leaderboard"
         options={{
           title: 'League',

@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 type PurchasesPackage = any;
 import { Colors } from '../constants/colors';
 import { DiagonalStripes } from '../components/DiagonalStripes';
-import { getOfferings, purchasePackage, restorePurchases, REVENUECAT_CONFIGURED } from '../lib/purchases';
+import { getOfferings, purchasePackage, restorePurchases } from '../lib/purchases';
 import { usePurchaseStore } from '../store/purchaseStore';
 
 const FREE_FEATURES = [
@@ -73,8 +73,7 @@ export default function PaywallScreen() {
     }
   }
 
-  // Only auto-dismiss if RevenueCat is live and the user is actually subscribed
-  if (isPremium && REVENUECAT_CONFIGURED) {
+  if (isPremium) {
     router.back();
     return null;
   }
@@ -184,7 +183,7 @@ export default function PaywallScreen() {
         <TouchableOpacity onPress={handleRestore} disabled={restoring}>
           <Text style={styles.footerLink}>{restoring ? 'RESTORING...' : 'RESTORE PURCHASES'}</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => router.back()}>
+        <TouchableOpacity onPress={() => router.replace('/discount-offer')}>
           <Text style={styles.footerLink}>NOT NOW</Text>
         </TouchableOpacity>
       </View>

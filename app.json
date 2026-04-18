@@ -52,7 +52,8 @@
           "locationAlwaysAndWhenInUsePermission": "Coco uses your location to detect if you've left your bed and auto-end your sleep session.",
           "isIosBackgroundLocationEnabled": true
         }
-      ]
+      ],
+      "expo-sharing"
     ]
   }
 }

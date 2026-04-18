@@ -31,6 +31,7 @@ export default function ProfileScreen() {
   const { isPremium, isTrialing } = usePurchaseStore();
   const { userId, username } = useAuthStore();
   const { profilePictureUri, setProfile } = useUserProfileStore();
+  const { avatarUrl, setAvatarUrl } = useAuthStore();
   const [promoCode, setPromoCode] = useState('');
   const [redeeming, setRedeeming] = useState(false);
 
@@ -209,14 +210,27 @@ export default function ProfileScreen() {
       quality: 0.8,
     });
     if (!result.canceled && result.assets[0]) {
-      try {
-        // Copy to Documents so it survives iOS cache eviction (~12h cache TTL)
-        const dest = `${FileSystem.documentDirectory}profile_picture.jpg`;
-        await FileSystem.copyAsync({ from: result.assets[0].uri, to: dest });
-        setProfile({ profilePictureUri: dest });
-      } catch {
-        // Fallback: store original uri if copy fails
-        setProfile({ profilePictureUri: result.assets[0].uri });
+      const localUri = result.assets[0].uri;
+      // Show locally right away so the UI feels instant
+      setProfile({ profilePictureUri: localUri });
+
+      // Upload to Supabase Storage in the background
+      if (userId) {
+        try {
+          const ext = localUri.split('.').pop()?.toLowerCase().replace('jpeg', 'jpg') ?? 'jpg';
+          const path = `${userId}/avatar.${ext}`;
+          const response = await fetch(localUri);
+          const blob = await response.blob();
+          const { error } = await supabase.storage
+            .from('avatars')
+            .upload(path, blob, { contentType: `image/${ext === 'jpg' ? 'jpeg' : ext}`, upsert: true });
+          if (!error) {
+            const { data } = supabase.storage.from('avatars').getPublicUrl(path);
+            await setAvatarUrl(data.publicUrl);
+          }
+        } catch {
+          // Upload failed silently — local preview still shows
+        }
       }
     }
   }
@@ -266,8 +280,8 @@ export default function ProfileScreen() {
       {/* Profile picture + username */}
       <View style={styles.profileHeader}>
         <TouchableOpacity onPress={pickProfilePicture} activeOpacity={0.8} style={styles.avatarWrap}>
-          {profilePictureUri ? (
-            <Image source={{ uri: profilePictureUri }} style={styles.avatar} />
+          {(avatarUrl ?? profilePictureUri) ? (
+            <Image source={{ uri: avatarUrl ?? profilePictureUri ?? undefined }} style={styles.avatar} />
           ) : (
             <View style={styles.avatarPlaceholder}>
               <Text style={styles.avatarPlaceholderText}>
@@ -628,10 +642,10 @@ function CoachRow({ icon, label, sublabel, value, onChange }: { icon: string; la
 }
 
 const coachRowStyles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, gap: 10, borderTopWidth: 1, borderTopColor: Colors.border },
+  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, gap: 10, borderTopWidth: 1, borderTopColor: Colors.border, minHeight: 56 },
   icon: { fontSize: 9, fontWeight: '900', fontStyle: 'italic', color: Colors.textMuted, width: 28 },
-  label: { fontSize: 11, fontWeight: '900', fontStyle: 'italic', color: Colors.textPrimary },
-  sub: { fontSize: 10, color: Colors.textMuted, marginTop: 1 },
+  label: { fontSize: 13, fontWeight: '900', fontStyle: 'italic', color: Colors.textPrimary },
+  sub: { fontSize: 10, color: Colors.textMuted, marginTop: 2 },
 });
 
 const devResetStyles = StyleSheet.create({
@@ -781,7 +795,7 @@ const styles = StyleSheet.create({
   },
   scheduleRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    padding: 16,
+    paddingHorizontal: 16, paddingVertical: 14, minHeight: 64,
   },
   scheduleRowBorder: { borderBottomWidth: 1, borderBottomColor: Colors.border },
   scheduleRowLabel: { fontSize: 13, fontWeight: '900', fontStyle: 'italic', color: Colors.textPrimary },
@@ -802,7 +816,7 @@ const styles = StyleSheet.create({
 
   alarmTimeRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingVertical: 10, borderTopWidth: 1, borderTopColor: Colors.border,
+    paddingVertical: 14, borderTopWidth: 1, borderTopColor: Colors.border, minHeight: 64,
   },
   alarmDaysRow: { flexDirection: 'row', gap: 6, marginTop: 14, flexWrap: 'wrap' },
   alarmDayPill: {

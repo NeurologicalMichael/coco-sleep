@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		0F9F526433FD46019668DAD7 /* CocoDeviceActivity.appex in Copy Files */ = {isa = PBXBuildFile; fileRef = 54532C800F52412AB9AA612E /* CocoDeviceActivity.appex */; };
+		0F9F526433FD46019668DAD7 /* CocoDeviceActivity.appex in Copy Files */ = {isa = PBXBuildFile; fileRef = 54532C800F52412AB9AA612E /* CocoDeviceActivity.appex */; platformFilter = ios; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
 		241ED85BFF3E4D808E5CE417 /* DeviceActivity.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F47EBB8FADF64A60837BFCF2 /* DeviceActivity.framework */; };
 		2B6902BDB246443BB71C5F07 /* CocoWidget.appex in Copy Files */ = {isa = PBXBuildFile; fileRef = 28D84FB59F7B485BAC668A80 /* CocoWidget.appex */; };
@@ -18,29 +18,29 @@
 		69E500DBFB0F4F70A884FB0C /* ManagedSettings.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8EAAC29A21FA4CDB88FCED9B /* ManagedSettings.framework */; };
 		7CF85438E002F849945C971E /* WidgetKitModule.m in Sources */ = {isa = PBXBuildFile; fileRef = AC3B40FFED023ABDB65DC395 /* WidgetKitModule.m */; };
 		8FD7D925EEAC81D242B2ACFE /* WidgetKitModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = A30D2FEB22FD1105872C3FD6 /* WidgetKitModule.swift */; };
-		BA05BC1CED5447C4BC453C26 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FB3A56C6773E4A00BD087F2F /* SwiftUI.framework */; };
-		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
-		BEC5E24506EF4B078A4844A6 /* CocoWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8177EC0274814CFA9A50A5E6 /* CocoWidget.swift */; };
-		CCE43AEE9A8845E8B765E3E2 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B6C7F501C57E4E39AD64020E /* WidgetKit.framework */; };
-		D84D74FA167E48FC9B59DC8F /* CocoWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = E57645ECA7BF4927A670DC9A /* CocoWidgetBundle.swift */; };
-		E38520B293CA4083B77621AD /* CocoDeviceActivityMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 800AFF70DB954DAABE606656 /* CocoDeviceActivityMonitor.swift */; };
-		E5853596A68D1BD03CC0A952 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 6433EE9E8185C7930DC1D9DE /* PrivacyInfo.xcprivacy */; };
-		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
-		AA001111222233334444BBBB /* growth_seed_3.png in Resources */ = {isa = PBXBuildFile; fileRef = AA001111222233334444AAAA /* growth_seed_3.png */; };
-		BB001111222233334444BBBB /* growth_baby_3.png in Resources */ = {isa = PBXBuildFile; fileRef = BB001111222233334444AAAA /* growth_baby_3.png */; };
-		CC001111222233334444BBBB /* growth_growing_3.png in Resources */ = {isa = PBXBuildFile; fileRef = CC001111222233334444AAAA /* growth_growing_3.png */; };
-		DD001111222233334444BBBB /* growth_mature_3.png in Resources */ = {isa = PBXBuildFile; fileRef = DD001111222233334444AAAA /* growth_mature_3.png */; };
-		EE001111222233334444BBBB /* growth_legendary_3.png in Resources */ = {isa = PBXBuildFile; fileRef = EE001111222233334444AAAA /* growth_legendary_3.png */; };
 		A1001111222233334444BBBB /* growth_seed_1.png in Resources */ = {isa = PBXBuildFile; fileRef = A1001111222233334444AAAA /* growth_seed_1.png */; };
 		A2001111222233334444BBBB /* growth_seed_2.png in Resources */ = {isa = PBXBuildFile; fileRef = A2001111222233334444AAAA /* growth_seed_2.png */; };
+		AA001111222233334444BBBB /* growth_seed_3.png in Resources */ = {isa = PBXBuildFile; fileRef = AA001111222233334444AAAA /* growth_seed_3.png */; };
 		B1001111222233334444BBBB /* growth_baby_1.png in Resources */ = {isa = PBXBuildFile; fileRef = B1001111222233334444AAAA /* growth_baby_1.png */; };
 		B2001111222233334444BBBB /* growth_baby_2.png in Resources */ = {isa = PBXBuildFile; fileRef = B2001111222233334444AAAA /* growth_baby_2.png */; };
+		BA05BC1CED5447C4BC453C26 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FB3A56C6773E4A00BD087F2F /* SwiftUI.framework */; };
+		BB001111222233334444BBBB /* growth_baby_3.png in Resources */ = {isa = PBXBuildFile; fileRef = BB001111222233334444AAAA /* growth_baby_3.png */; };
+		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
+		BEC5E24506EF4B078A4844A6 /* CocoWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8177EC0274814CFA9A50A5E6 /* CocoWidget.swift */; };
 		C1001111222233334444BBBB /* growth_growing_1.png in Resources */ = {isa = PBXBuildFile; fileRef = C1001111222233334444AAAA /* growth_growing_1.png */; };
 		C2001111222233334444BBBB /* growth_growing_2.png in Resources */ = {isa = PBXBuildFile; fileRef = C2001111222233334444AAAA /* growth_growing_2.png */; };
+		CC001111222233334444BBBB /* growth_growing_3.png in Resources */ = {isa = PBXBuildFile; fileRef = CC001111222233334444AAAA /* growth_growing_3.png */; };
+		CCE43AEE9A8845E8B765E3E2 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B6C7F501C57E4E39AD64020E /* WidgetKit.framework */; };
 		D1001111222233334444BBBB /* growth_mature_1.png in Resources */ = {isa = PBXBuildFile; fileRef = D1001111222233334444AAAA /* growth_mature_1.png */; };
 		D2001111222233334444BBBB /* growth_mature_2.png in Resources */ = {isa = PBXBuildFile; fileRef = D2001111222233334444AAAA /* growth_mature_2.png */; };
+		D84D74FA167E48FC9B59DC8F /* CocoWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = E57645ECA7BF4927A670DC9A /* CocoWidgetBundle.swift */; };
+		DD001111222233334444BBBB /* growth_mature_3.png in Resources */ = {isa = PBXBuildFile; fileRef = DD001111222233334444AAAA /* growth_mature_3.png */; };
 		E1001111222233334444BBBB /* growth_legendary_1.png in Resources */ = {isa = PBXBuildFile; fileRef = E1001111222233334444AAAA /* growth_legendary_1.png */; };
 		E2001111222233334444BBBB /* growth_legendary_2.png in Resources */ = {isa = PBXBuildFile; fileRef = E2001111222233334444AAAA /* growth_legendary_2.png */; };
+		E38520B293CA4083B77621AD /* CocoDeviceActivityMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 800AFF70DB954DAABE606656 /* CocoDeviceActivityMonitor.swift */; };
+		E5853596A68D1BD03CC0A952 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 6433EE9E8185C7930DC1D9DE /* PrivacyInfo.xcprivacy */; };
+		EE001111222233334444BBBB /* growth_legendary_3.png in Resources */ = {isa = PBXBuildFile; fileRef = EE001111222233334444AAAA /* growth_legendary_3.png */; };
+		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -73,42 +73,42 @@
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = CocoSleep/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = CocoSleep/Info.plist; sourceTree = "<group>"; };
 		17988030F6D5B76D2956ED6B /* Pods-CocoSleep.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-CocoSleep.debug.xcconfig"; path = "Target Support Files/Pods-CocoSleep/Pods-CocoSleep.debug.xcconfig"; sourceTree = "<group>"; };
-		28D84FB59F7B485BAC668A80 /* CocoWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = undefined; name = CocoWidget.appex; path = CocoWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
-		54532C800F52412AB9AA612E /* CocoDeviceActivity.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = undefined; name = CocoDeviceActivity.appex; path = CocoDeviceActivity.appex; sourceTree = BUILT_PRODUCTS_DIR; };
-		6433EE9E8185C7930DC1D9DE /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = CocoSleep/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		28D84FB59F7B485BAC668A80 /* CocoWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; fileEncoding = 9; includeInIndex = 0; path = CocoWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		54532C800F52412AB9AA612E /* CocoDeviceActivity.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; fileEncoding = 9; includeInIndex = 0; path = CocoDeviceActivity.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		6433EE9E8185C7930DC1D9DE /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = CocoSleep/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		800AFF70DB954DAABE606656 /* CocoDeviceActivityMonitor.swift */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 4; includeInIndex = 0; lastKnownFileType = sourcecode.swift; name = CocoDeviceActivityMonitor.swift; path = CocoDeviceActivity/CocoDeviceActivityMonitor.swift; sourceTree = "<group>"; };
 		8177EC0274814CFA9A50A5E6 /* CocoWidget.swift */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 4; includeInIndex = 0; lastKnownFileType = sourcecode.swift; name = CocoWidget.swift; path = CocoWidget/CocoWidget.swift; sourceTree = "<group>"; };
 		847273B2AAECB241020D3177 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-CocoSleep/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
-		8EAAC29A21FA4CDB88FCED9B /* ManagedSettings.framework */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = wrapper.framework; name = ManagedSettings.framework; path = System/Library/Frameworks/ManagedSettings.framework; sourceTree = SDKROOT; };
-		98114CDDF3074FD99BE14429 /* FamilyControls.framework */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = wrapper.framework; name = FamilyControls.framework; path = System/Library/Frameworks/FamilyControls.framework; sourceTree = SDKROOT; };
+		8EAAC29A21FA4CDB88FCED9B /* ManagedSettings.framework */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = wrapper.framework; name = ManagedSettings.framework; path = System/Library/Frameworks/ManagedSettings.framework; sourceTree = SDKROOT; };
+		98114CDDF3074FD99BE14429 /* FamilyControls.framework */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = wrapper.framework; name = FamilyControls.framework; path = System/Library/Frameworks/FamilyControls.framework; sourceTree = SDKROOT; };
+		A1001111222233334444AAAA /* growth_seed_1.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = growth_seed_1.png; path = CocoWidget/growth_seed_1.png; sourceTree = "<group>"; };
+		A2001111222233334444AAAA /* growth_seed_2.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = growth_seed_2.png; path = CocoWidget/growth_seed_2.png; sourceTree = "<group>"; };
 		A30D2FEB22FD1105872C3FD6 /* WidgetKitModule.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CocoSleep/WidgetKitModule.swift; sourceTree = "<group>"; };
+		AA001111222233334444AAAA /* growth_seed_3.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = growth_seed_3.png; path = CocoWidget/growth_seed_3.png; sourceTree = "<group>"; };
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = CocoSleep/SplashScreen.storyboard; sourceTree = "<group>"; };
 		AC3B40FFED023ABDB65DC395 /* WidgetKitModule.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; path = CocoSleep/WidgetKitModule.m; sourceTree = "<group>"; };
-		B6C7F501C57E4E39AD64020E /* WidgetKit.framework */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		B1001111222233334444AAAA /* growth_baby_1.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = growth_baby_1.png; path = CocoWidget/growth_baby_1.png; sourceTree = "<group>"; };
+		B2001111222233334444AAAA /* growth_baby_2.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = growth_baby_2.png; path = CocoWidget/growth_baby_2.png; sourceTree = "<group>"; };
+		B6C7F501C57E4E39AD64020E /* WidgetKit.framework */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		BB001111222233334444AAAA /* growth_baby_3.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = growth_baby_3.png; path = CocoWidget/growth_baby_3.png; sourceTree = "<group>"; };
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
+		C1001111222233334444AAAA /* growth_growing_1.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = growth_growing_1.png; path = CocoWidget/growth_growing_1.png; sourceTree = "<group>"; };
 		C16DEA10818B2725CDD3E2AF /* libPods-CocoSleep.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-CocoSleep.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		C2001111222233334444AAAA /* growth_growing_2.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = growth_growing_2.png; path = CocoWidget/growth_growing_2.png; sourceTree = "<group>"; };
+		CC001111222233334444AAAA /* growth_growing_3.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = growth_growing_3.png; path = CocoWidget/growth_growing_3.png; sourceTree = "<group>"; };
+		D1001111222233334444AAAA /* growth_mature_1.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = growth_mature_1.png; path = CocoWidget/growth_mature_1.png; sourceTree = "<group>"; };
+		D2001111222233334444AAAA /* growth_mature_2.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = growth_mature_2.png; path = CocoWidget/growth_mature_2.png; sourceTree = "<group>"; };
+		DD001111222233334444AAAA /* growth_mature_3.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = growth_mature_3.png; path = CocoWidget/growth_mature_3.png; sourceTree = "<group>"; };
+		E1001111222233334444AAAA /* growth_legendary_1.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = growth_legendary_1.png; path = CocoWidget/growth_legendary_1.png; sourceTree = "<group>"; };
+		E2001111222233334444AAAA /* growth_legendary_2.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = growth_legendary_2.png; path = CocoWidget/growth_legendary_2.png; sourceTree = "<group>"; };
 		E57645ECA7BF4927A670DC9A /* CocoWidgetBundle.swift */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 4; includeInIndex = 0; lastKnownFileType = sourcecode.swift; name = CocoWidgetBundle.swift; path = CocoWidget/CocoWidgetBundle.swift; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
+		EE001111222233334444AAAA /* growth_legendary_3.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = growth_legendary_3.png; path = CocoWidget/growth_legendary_3.png; sourceTree = "<group>"; };
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = CocoSleep/AppDelegate.swift; sourceTree = "<group>"; };
 		F11748442D0722820044C1D9 /* CocoSleep-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "CocoSleep-Bridging-Header.h"; path = "CocoSleep/CocoSleep-Bridging-Header.h"; sourceTree = "<group>"; };
 		F37A38C5DF9726B251C97044 /* Pods-CocoSleep.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-CocoSleep.release.xcconfig"; path = "Target Support Files/Pods-CocoSleep/Pods-CocoSleep.release.xcconfig"; sourceTree = "<group>"; };
-		F47EBB8FADF64A60837BFCF2 /* DeviceActivity.framework */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = wrapper.framework; name = DeviceActivity.framework; path = System/Library/Frameworks/DeviceActivity.framework; sourceTree = SDKROOT; };
-		FB3A56C6773E4A00BD087F2F /* SwiftUI.framework */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
-		AA001111222233334444AAAA /* growth_seed_3.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = growth_seed_3.png; path = CocoWidget/growth_seed_3.png; sourceTree = "<group>"; };
-		BB001111222233334444AAAA /* growth_baby_3.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = growth_baby_3.png; path = CocoWidget/growth_baby_3.png; sourceTree = "<group>"; };
-		CC001111222233334444AAAA /* growth_growing_3.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = growth_growing_3.png; path = CocoWidget/growth_growing_3.png; sourceTree = "<group>"; };
-		DD001111222233334444AAAA /* growth_mature_3.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = growth_mature_3.png; path = CocoWidget/growth_mature_3.png; sourceTree = "<group>"; };
-		EE001111222233334444AAAA /* growth_legendary_3.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = growth_legendary_3.png; path = CocoWidget/growth_legendary_3.png; sourceTree = "<group>"; };
-		A1001111222233334444AAAA /* growth_seed_1.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = growth_seed_1.png; path = CocoWidget/growth_seed_1.png; sourceTree = "<group>"; };
-		A2001111222233334444AAAA /* growth_seed_2.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = growth_seed_2.png; path = CocoWidget/growth_seed_2.png; sourceTree = "<group>"; };
-		B1001111222233334444AAAA /* growth_baby_1.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = growth_baby_1.png; path = CocoWidget/growth_baby_1.png; sourceTree = "<group>"; };
-		B2001111222233334444AAAA /* growth_baby_2.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = growth_baby_2.png; path = CocoWidget/growth_baby_2.png; sourceTree = "<group>"; };
-		C1001111222233334444AAAA /* growth_growing_1.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = growth_growing_1.png; path = CocoWidget/growth_growing_1.png; sourceTree = "<group>"; };
-		C2001111222233334444AAAA /* growth_growing_2.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = growth_growing_2.png; path = CocoWidget/growth_growing_2.png; sourceTree = "<group>"; };
-		D1001111222233334444AAAA /* growth_mature_1.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = growth_mature_1.png; path = CocoWidget/growth_mature_1.png; sourceTree = "<group>"; };
-		D2001111222233334444AAAA /* growth_mature_2.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = growth_mature_2.png; path = CocoWidget/growth_mature_2.png; sourceTree = "<group>"; };
-		E1001111222233334444AAAA /* growth_legendary_1.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = growth_legendary_1.png; path = CocoWidget/growth_legendary_1.png; sourceTree = "<group>"; };
-		E2001111222233334444AAAA /* growth_legendary_2.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = growth_legendary_2.png; path = CocoWidget/growth_legendary_2.png; sourceTree = "<group>"; };
+		F47EBB8FADF64A60837BFCF2 /* DeviceActivity.framework */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = wrapper.framework; name = DeviceActivity.framework; path = System/Library/Frameworks/DeviceActivity.framework; sourceTree = SDKROOT; };
+		FB3A56C6773E4A00BD087F2F /* SwiftUI.framework */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -148,7 +148,6 @@
 				17988030F6D5B76D2956ED6B /* Pods-CocoSleep.debug.xcconfig */,
 				F37A38C5DF9726B251C97044 /* Pods-CocoSleep.release.xcconfig */,
 			);
-			name = Pods;
 			path = Pods;
 			sourceTree = "<group>";
 		};
@@ -206,6 +205,7 @@
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
 				08706A7E27FB2BF365356637 /* Pods */,
 				C3AAADB8527894B3BA4B0BA8 /* ExpoModulesProviders */,
+				B5A432D72F8D5F8400A5E6D9 /* Recovered References */,
 			);
 			indentWidth = 2;
 			sourceTree = "<group>";
@@ -220,6 +220,31 @@
 				28D84FB59F7B485BAC668A80 /* CocoWidget.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		B5A432D72F8D5F8400A5E6D9 /* Recovered References */ = {
+			isa = PBXGroup;
+			children = (
+				800AFF70DB954DAABE606656 /* CocoDeviceActivityMonitor.swift */,
+				8177EC0274814CFA9A50A5E6 /* CocoWidget.swift */,
+				E57645ECA7BF4927A670DC9A /* CocoWidgetBundle.swift */,
+				AA001111222233334444AAAA /* growth_seed_3.png */,
+				BB001111222233334444AAAA /* growth_baby_3.png */,
+				CC001111222233334444AAAA /* growth_growing_3.png */,
+				DD001111222233334444AAAA /* growth_mature_3.png */,
+				EE001111222233334444AAAA /* growth_legendary_3.png */,
+				A1001111222233334444AAAA /* growth_seed_1.png */,
+				A2001111222233334444AAAA /* growth_seed_2.png */,
+				B1001111222233334444AAAA /* growth_baby_1.png */,
+				B2001111222233334444AAAA /* growth_baby_2.png */,
+				C1001111222233334444AAAA /* growth_growing_1.png */,
+				C2001111222233334444AAAA /* growth_growing_2.png */,
+				D1001111222233334444AAAA /* growth_mature_1.png */,
+				D2001111222233334444AAAA /* growth_mature_2.png */,
+				E1001111222233334444AAAA /* growth_legendary_1.png */,
+				E2001111222233334444AAAA /* growth_legendary_2.png */,
+			);
+			name = "Recovered References";
 			sourceTree = "<group>";
 		};
 		BB2F792B24A3F905000567C9 /* Supporting */ = {
@@ -272,6 +297,7 @@
 				800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */,
 				7585067F6DC9442A836B8F59 /* Copy Files */,
 				307E3EFD849247648E7F6D41 /* Copy Files */,
+				C0C0DEAD00001A2B3C4D5E6F /* Strip DeviceActivity for Simulator */,
 				18E2B373BB682E0262427F42 /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
@@ -452,9 +478,11 @@
 				"${PODS_CONFIGURATION_BUILD_DIR}/ExpoFileSystem/ExpoFileSystem_privacy.bundle",
 				"${PODS_CONFIGURATION_BUILD_DIR}/ExpoNotifications/ExpoNotifications_privacy.bundle",
 				"${PODS_CONFIGURATION_BUILD_DIR}/ExpoTaskManager/ExpoTaskManager_privacy.bundle",
+				"${PODS_CONFIGURATION_BUILD_DIR}/PurchasesHybridCommon/PurchasesHybridCommon.bundle",
 				"${PODS_CONFIGURATION_BUILD_DIR}/RNCAsyncStorage/RNCAsyncStorage_resources.bundle",
 				"${PODS_CONFIGURATION_BUILD_DIR}/React-Core/React-Core_privacy.bundle",
 				"${PODS_CONFIGURATION_BUILD_DIR}/React-cxxreact/React-cxxreact_privacy.bundle",
+				"${PODS_CONFIGURATION_BUILD_DIR}/RevenueCat/RevenueCat.bundle",
 				"${PODS_CONFIGURATION_BUILD_DIR}/SDWebImage/SDWebImage.bundle",
 			);
 			name = "[CP] Copy Pods Resources";
@@ -466,9 +494,11 @@
 				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/ExpoFileSystem_privacy.bundle",
 				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/ExpoNotifications_privacy.bundle",
 				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/ExpoTaskManager_privacy.bundle",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/PurchasesHybridCommon.bundle",
 				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/RNCAsyncStorage_resources.bundle",
 				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/React-Core_privacy.bundle",
 				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/React-cxxreact_privacy.bundle",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/RevenueCat.bundle",
 				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/SDWebImage.bundle",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -499,6 +529,25 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "# This script configures Expo modules and generates the modules provider file.\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-CocoSleep/expo-configure-project.sh\"\n";
+		};
+		C0C0DEAD00001A2B3C4D5E6F /* Strip DeviceActivity for Simulator */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Strip DeviceActivity for Simulator";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "if [ \"$PLATFORM_NAME\" = \"iphonesimulator\" ]; then\n  APPEX=\"${BUILT_PRODUCTS_DIR}/${WRAPPER_NAME}/PlugIns/CocoDeviceActivity.appex\"\n  PLIST=\"${APPEX}/Info.plist\"\n  if [ -f \"$PLIST\" ]; then\n    # Replace unsupported extension point with one valid on Simulator\n    /usr/libexec/PlistBuddy -c \"Delete :NSExtension\" \"$PLIST\" 2>/dev/null || true\n    /usr/libexec/PlistBuddy -c \"Add :NSExtension dict\" \"$PLIST\"\n    /usr/libexec/PlistBuddy -c \"Add :NSExtension:NSExtensionPointIdentifier string com.apple.widgetkit-extension\" \"$PLIST\"\n    # Sync CFBundleVersion with parent app\n    PARENT_VER=$(/usr/libexec/PlistBuddy -c \"Print :CFBundleVersion\" \"${BUILT_PRODUCTS_DIR}/${WRAPPER_NAME}/Info.plist\" 2>/dev/null)\n    [ -n \"$PARENT_VER\" ] && /usr/libexec/PlistBuddy -c \"Add :CFBundleVersion string $PARENT_VER\" \"$PLIST\" 2>/dev/null || /usr/libexec/PlistBuddy -c \"Set :CFBundleVersion $PARENT_VER\" \"$PLIST\" 2>/dev/null || true\n    echo \"Patched CocoDeviceActivity.appex for simulator (ext point + version)\"\n  fi\nfi\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -565,7 +614,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = CocoSleep/CocoSleep.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 12;
 				DEVELOPMENT_TEAM = TSN4C4C54K;
 				ENABLE_BITCODE = NO;
 				GCC_PREPROCESSOR_DEFINITIONS = (
@@ -603,7 +652,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = CocoSleep/CocoSleep.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 12;
 				DEVELOPMENT_TEAM = TSN4C4C54K;
 				INFOPLIST_FILE = CocoSleep/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
